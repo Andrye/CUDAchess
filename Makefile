@@ -4,14 +4,13 @@ NVCC  := $(CUDA_INSTALL_PATH)/bin/nvcc
 INCLUDES = -I. -I$(CUDA_INSTALL_PATH)/include
 
 # Options
-NVCCOPTIONS = -arch sm_20 -std=c++11
+NVCCOPTIONS = -arch sm_20 -std=c++11 -rdc=true
 
 # Common flags
 COMMONFLAGS += $(INCLUDES)
 NVCCFLAGS += $(COMMONFLAGS) $(NVCCOPTIONS)
 
-OBJS = chess.cu.o
-TARGET = chess.x
+
 
 .SUFFIXES:	.cu	
 
@@ -21,7 +20,10 @@ TARGET = chess.x
 $(TARGET): $(OBJS)
 	$(NVCC) $(NVCCOPTIONS) $(OBJS) main.cu -o $(TARGET)
 
+tictactoe: alphabeta.cu.o tictactoe.cu.o main.cu.o
+	$(NVCC) $(NVCCOPTIONS) tictactoe.cu.o alphabeta.cu.o main.cu.o -o tictactoe
+
 clean:
-	rm -rf $(TARGET) *.o
+	rm -rf *.x *.o
 
 
