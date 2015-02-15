@@ -2,7 +2,7 @@
 #define NODE_H_INCLUDED
 #include<cstdint>
 
-struct node;
+#include "node_implementation.h"
 
 __host__
 node* allocate_nodes(int);
@@ -34,6 +34,7 @@ bool get_child(node const*, unsigned int, node*);
 __host__ __device__
 float value(node const*);
 
-__host__
+__host__ __device__
 bool is_terminal(node const*);
+
 #endif

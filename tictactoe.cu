@@ -1,10 +1,12 @@
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
-struct node{
+#include "node.h"
+/*struct node{
     uint64_t xs;
     uint64_t os;
 };
+*/
 
 int node_size(){
     return sizeof(node);
@@ -46,12 +48,18 @@ node const *ptr_plus(node const *n, int i){
 
 
 __host__
+inline int get_code_hash(char const* line)
+{
+	return line[0] - '0' + 4 * (line[2] - '0') + 16 * (line[4] - '0');
+}
+
+__host__
 int scan_move(char const* line){
     if (line[0] < '0' || '3' < line[0] || line[1] != ' ' || 
         line[2] < '0' || '3' < line[2] || line[3] != ' ' ||
         line[4] < '0' || '3' < line[4] || (line[5] != '\0' && line[5] != '\n'))
         return -1;
-    return line[0] - '0' + 4 * (line[2] - '0') + 16 * (line[4] - '0');
+    return get_code_hash(line);
 }
 
 extern const int n_children = 64;
@@ -114,7 +122,7 @@ int line_type(node const *n, uint64_t line){
     if((os == 0) == (xs == 0)) return 0;
     return os ? os : xs + 4;
 }
-// stats[0] := number of lines with no Os or Xs or with both Os and Xs
+// stats[0] := number of lines with no Os or Xs or with both Os and Xs  //Os = mine, Xs = yours
 // stats[i=1..4] := number of lines with i Os and no Xs
 // stats[i=5..8] := number of lines with i-4 Xs and no Os;
 __host__ __device__
