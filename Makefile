@@ -1,7 +1,7 @@
 CUDA_INSTALL_PATH ?= /usr/local/cuda
 
 NVCC  := $(CUDA_INSTALL_PATH)/bin/nvcc
-INCLUDES = -I. -I$(CUDA_INSTALL_PATH)/include
+INCLUDES = -Iinclude -I$(CUDA_INSTALL_PATH)/include
 
 # Options
 NVCCOPTIONS = -arch sm_20 -std=c++11 -rdc=true -g -G
@@ -14,14 +14,17 @@ NVCCFLAGS += $(COMMONFLAGS) $(NVCCOPTIONS)
 
 .SUFFIXES:	.cu	
 
-%.cu.o: %.cu
-	$(NVCC) $(NVCCFLAGS) -Itictactoe -c $< -o $@
+%.main.cu.o: src/main.cu
+	$(NVCC) $(NVCCFLAGS) -Iinclude/$* -c $< -o $@
 
-$(TARGET): $(OBJS)
-	$(NVCC) $(NVCCOPTIONS) $(OBJS) main.cu -o $(TARGET)
+%.alphabeta.cu.o: src/alphabeta.cu
+	$(NVCC) $(NVCCFLAGS) -Iinclude/$* -c $< -o $@
 
-tictactoe: alphabeta.cu.o tictactoe.cu.o main.cu.o
-	$(NVCC) $(NVCCOPTIONS) tictactoe.cu.o alphabeta.cu.o main.cu.o -o tictactoe.e
+%.node.cu.o: src/%/node.cu
+	$(NVCC) $(NVCCFLAGS) -Iinclude/$* -c $< -o $@
+
+%:  %.main.cu.o %.alphabeta.cu.o %.node.cu.o
+	$(NVCC) $(NVCCFLAGS) $*.node.cu.o $*.alphabeta.cu.o $*.main.cu.o -o $@.x
 
 clean:
 	rm -rf *.x *.o
