@@ -1,20 +1,34 @@
 #include "alphabeta.h"
 #include <stdio.h>
+
+__global__
+void compute_other_nodes (node *nodes, float *dev_values, node const &current_node, unsigned int depth, int n_children, float limit);
+
+__device__
+float compute_node(node const &current_node, unsigned int depth, int n_children, float limit);
+
+__host__ //global in the future
+int get_best_index(float * d_values, int n_children);
+
+
+
+__host__ __device__
+float invert_limit(float limit);
+
 /* nodes - for now it's used as a free space for compute_other_nodes(). Maybe it'll change later.
  * depth - not fully implemented as of yet
  * best_move - can be nullptr if we only want the numerical result
  */
 __host__ //__global__ 
-float alpha_beta(node * nodes, float * d_values, node *current_node, unsigned int depth, int n_children, node * best_move, dim3 numThreads) //TODO: for now it's assumed n_children < legth of "nodes" array
+float alpha_beta(node * nodes, float * d_values, node const &current_node, unsigned int depth, int n_children, node * best_move, dim3 numThreads) //TODO: for now it's assumed n_children < legth of "nodes" array
 {
     if(depth == 0)
 		return invert_limit(value(current_node));
 
 
 	node child;
-	node * childptr = &child;
-	get_child(current_node, 0, childptr); //TODO: not 0, but what? random? some heura to find a sound candidate?
-	float limit_estimation = alpha_beta(nodes, d_values, childptr, depth - 1, n_children, nullptr, numThreads);
+	get_child(current_node, 0, &child); //TODO: not 0, but what? random? some heura to find a sound candidate?
+	float limit_estimation = alpha_beta(nodes, d_values, child, depth - 1, n_children, nullptr, numThreads);
 	
 
 	compute_other_nodes <<<1, numThreads>>> (nodes, d_values, current_node, depth, n_children, limit_estimation);
@@ -28,7 +42,7 @@ float alpha_beta(node * nodes, float * d_values, node *current_node, unsigned in
 	if(best_move != nullptr)
     {
         //don't look at this code, it's stupid. But I want to finish it now
-		cudaMemcpy(best_move, ptr_plus(nodes, best_ind), node_size(), cudaMemcpyDeviceToHost);
+		cudaMemcpy(best_move, nodes + best_ind, sizeof(node), cudaMemcpyDeviceToHost);
 	//    printf("  %d\n", (int)(best_move->xs + best_move->os));
     }
 
@@ -42,23 +56,22 @@ float alpha_beta(node * nodes, float * d_values, node *current_node, unsigned in
 
 
 __global__
-void compute_other_nodes (node *nodes, float *d_values, node *current_node, unsigned int depth, int n_children, float limit)
+void compute_other_nodes (node *nodes, float *d_values, node const &current_node, unsigned int depth, int n_children, float limit)
 {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
     //int bl_id = blockIdx.x; //TODO: no blocks so far
     //int th_id = threadIdx.x;
     
     node child;
-    node * childptr = &child;
-    get_child(current_node, id, childptr);
+    get_child(current_node, id, &child);
 
 	
-	compute_node(childptr, depth - 1, n_children, invert_limit(limit));
+	compute_node(child, depth - 1, n_children, invert_limit(limit));
 	
 }
 
 __device__
-float compute_node(node *current_node, unsigned int depth, int n_children, float limit)
+float compute_node(node const &current_node, unsigned int depth, int n_children, float limit)
 {
 	float estimate_val = value(current_node);
 	if(estimate_val < limit)
@@ -67,13 +80,12 @@ float compute_node(node *current_node, unsigned int depth, int n_children, float
 		return estimate_val;
 	
 	node child;
-	node * childptr = &child;
 	float best_res = limit - 1;
 	
 	for (int i=0; i<n_children; i++)
 	{
-		get_child(current_node, i, childptr);
-		float temp_res = value(childptr);
+		get_child(current_node, i, &child);
+		float temp_res = value(child);
 		if(temp_res > best_res)
 			best_res = temp_res;
 	}

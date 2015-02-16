@@ -3,76 +3,59 @@
 #include "alphabeta.h"
 #include "node.h"
 #include <cstdint>
-#include <cstdio>
+#include <iostream>
 #include <vector>
 
 const int DEPTH = 5;
-extern const int n_children;
 
-void get_players_move(node * n, node * next_node);
-void get_bots_move(node * n, node * next_node);
+unsigned int get_bots_move(node const&);
 
 
-node launchKernel(node * current_node){
+node launchKernel(node const& current_node){
     const int n_threads = 1024;
 
-    node* nodes =  allocate_nodes(n_threads);
+    node* nodes = new node[n_threads];
     for(int i = 0; i < n_threads; i++){
-        init_node(ptr_plus(nodes, i));
+	    nodes[i] = {};
     }
 
     node *dev_nodes;
     float* dev_values;
 
     cudaMalloc((void**) &dev_values, sizeof(float) * n_threads);
-    cudaMalloc((void**) &dev_nodes, node_size() * n_threads); //TODO: so far I decided that it indeed should be n_threads, not n_blocks. We'll see later.
-    cudaMemcpy(dev_nodes, nodes, node_size() * n_threads, cudaMemcpyHostToDevice);
+    cudaMalloc((void**) &dev_nodes, sizeof(node) * n_threads); //TODO: so far I decided that it indeed should be n_threads, not n_blocks. We'll see later.
+    cudaMemcpy(dev_nodes, nodes, sizeof(node) * n_threads, cudaMemcpyHostToDevice);
     dim3 numThreads(n_threads, n_children, 1);
-	
-	node best_move;
+
+    node best_move;
     alpha_beta(dev_nodes, dev_values, current_node, DEPTH, n_children, &best_move, numThreads); //TODO: for now it's cudaDeviceSynchronize();
-	//printf("%d\n", best_move.xs + best_move.os);
-	return best_move;
+    delete[] nodes;
+    return best_move;
 }
 
-
-
 int main(){
-    node *nodes = allocate_nodes(2);
-    init_node(nodes);
-    node *n = nodes;
-    for(int i = 0; !is_terminal(ptr_plus(nodes, i)); i=1-i, n = ptr_plus(nodes, i)){
-        if(i==0)
-			get_players_move(n, ptr_plus(nodes, 1-i));
-		else
-			get_bots_move(n, ptr_plus(nodes, 1-i));
-	}
+    node nodes[2];
+    nodes[0] = {};
+    for(int i = 0; !is_terminal(nodes[i]); i=1-i){
+        unsigned int move;
+	    if(i==0)
+	        move = get_console_move(nodes[i]);
+	    else
+	        move = get_bots_move(nodes[i]);
+	    if(!get_child(nodes[i], move, nodes+1-i))
+	        throw "Wrong move returned";
+    }
     printf("Implement me\n");
     return 0;
 }
 
 
-void get_players_move(node * my_node, node * next_node)
+
+unsigned int get_bots_move(node const &n)
 {
-		        
-	print_node(my_node);
-	printf("node value: %f\n", value(my_node));
-	int move = -1;
-	do {
-		printf("your move\n");
-		char *lineptr = nullptr;
-		size_t len = 0;
-		getline(&lineptr, &len,  stdin);
-		move = scan_move(lineptr);
-		free(lineptr);
-	} while(move < 0 || !get_child(my_node, move, next_node));
+    node next_node = launchKernel(n);
+    for(unsigned int i = 0; i < n_children; i++)
+        if(get_child(n, i, nullptr))
+            return i;
+    throw "no move can be done";
 }
-
-void get_bots_move(node * n, node * next_node)
-{
-	* next_node = launchKernel(n);
-}
-
-
-            
-            

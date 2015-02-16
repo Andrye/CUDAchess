@@ -1,66 +1,59 @@
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
+#include <iostream>
 #include "node.h"
-/*struct node{
-    uint64_t xs;
-    uint64_t os;
-};
-*/
 
-int node_size(){
-    return sizeof(node);
-}
 
 __host__
-void print_node(node const *n){
-    for(int x = 0; x < 4; x++) printf("x%d:                  ", x); printf("\n");
-    for(int x = 0; x < 4; x++) printf("    y0  y1  y2  y3   "); printf("\n");
+std::ostream &operator <<(std::ostream &os, node const &n){
+    for(int x = 0; x < 4; x++) os << "x" << x << ":                  "; os << "\n";
+    for(int x = 0; x < 4; x++) os <<"    y0  y1  y2  y3   "; os << "\n";
     char const* h = "  +---+---+---+---+  ";
-    printf("%s%s%s%s\n", h, h, h, h);
+    os << h << h << h << h << "\n";
     for(int z = 0; z < 4; z++){
         for(int x = 0; x < 4; x++){
-            printf("z%d", z);
+            os << "z" << z;
             for(int y = 0; y < 4; y++){
                 int bit = x + 4 * y + 16 * z;
-                printf("| %c ", (n->xs>>bit &1)?'X':((n->os>>bit)&1)?'O':' ');
+                os << "| " << ((n.xs>>bit &1)?'X':((n.os>>bit)&1)?'O':' ') << " ";
             }
-            printf("|  ");
+            os << "|  ";
         }
-        printf("\n%s%s%s%s\n", h, h, h, h);
+        os << "\n" << h << h << h << h << "\n";
     }
+    return os;
 }
 
 __host__
-node* allocate_nodes(int n){
-    return (node*)malloc(n * sizeof(node));
-}
-
-__host__ __device__
-node *ptr_plus(node *n, int i){
-    return n + i;
-}
-
-__host__
-node const *ptr_plus(node const *n, int i){
-    return n + i;
-}
-
-
-__host__
-inline int get_code_hash(char const* line)
+inline int get_code_hash(std::string const &line)
 {
 	return line[0] - '0' + 4 * (line[2] - '0') + 16 * (line[4] - '0');
 }
 
 __host__
-int scan_move(char const* line){
+int parse_move(std::string const &line){
     if (line[0] < '0' || '3' < line[0] || line[1] != ' ' || 
         line[2] < '0' || '3' < line[2] || line[3] != ' ' ||
         line[4] < '0' || '3' < line[4] || (line[5] != '\0' && line[5] != '\n'))
         return -1;
     return get_code_hash(line);
 }
+
+unsigned int get_console_move(node const &current_node){
+    std::cout << current_node << "node value:" << value(current_node) << std::endl;
+    int move = -1;
+    do {
+        std::cout << "your move" << std::endl;
+        std::string line;
+        std::getline(std::cin, line);
+        move = parse_move(line);
+    } while(move < 0 || !get_child(current_node, move, nullptr));
+    return (unsigned int) move;
+}
+
+
+
 
 extern const int n_children = 64;
 
@@ -88,13 +81,14 @@ int popcount(uint64_t x){
 }
 
 __host__ __device__
-bool get_child(node const* parent, unsigned int id, node* d_child){
-    if(((parent->xs | parent->os) >> id) & 1){
+bool get_child(node const& parent, unsigned int id, node *d_child){
+    if(((parent.xs | parent.os) >> id) & 1){
         return false;
     }
-    d_child->os = parent->xs;
-    d_child->xs = parent->os + (((uint64_t)1) << id);
-
+    if(d_child != nullptr){
+        d_child->os = parent.xs;
+        d_child->xs = parent.os + (((uint64_t)1) << id);
+    }
     return true;
 }
 
@@ -116,9 +110,9 @@ uint64_t make_line(int x0, int dx, int y0, int dy, int z0, int dz){
 }
 
 __host__ __device__
-int line_type(node const *n, uint64_t line){
-    int os = popcount(n->os & line);
-    int xs = popcount(n->xs & line);
+int line_type(node const &n, uint64_t line){
+    int os = popcount(n.os & line);
+    int xs = popcount(n.xs & line);
     if((os == 0) == (xs == 0)) return 0;
     return os ? os : xs + 4;
 }
@@ -126,7 +120,7 @@ int line_type(node const *n, uint64_t line){
 // stats[i=1..4] := number of lines with i Os and no Xs
 // stats[i=5..8] := number of lines with i-4 Xs and no Os;
 __host__ __device__
-void line_stats(node const *n, int* stats){
+void line_stats(node const &n, int* stats){
     //"1D" lines:
     for(int i = 0; i < 4; i++)
         for(int j = 0; j < 4; j++){
@@ -154,7 +148,7 @@ void line_stats(node const *n, int* stats){
 
 
 __host__ __device__
-float value(node const* n){
+float value(node const& n){
     int stats[9] = {};
     line_stats(n, stats);
     if(stats[4]) return 1;
@@ -169,9 +163,9 @@ float value(node const* n){
 }
 
 __host__
-bool is_terminal(node const *n){
-    assert((n->xs & n->os) == 0);
-    if(popcount(n->xs | n->os) == 64) return true;
+bool is_terminal(node const &n){
+    assert((n.xs & n.os) == 0);
+    if(popcount(n.xs | n.os) == 64) return true;
     int stats[9] = {};
     line_stats(n, stats);
     return stats[4] || stats[8];
