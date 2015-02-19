@@ -16,6 +16,8 @@ unsigned int get_console_move(node const&);
 
 __host__ __device__
 bool get_child(node const&, unsigned int, node*);
+__host__ __device__
+bool get_child(node *, unsigned int, node*);
 
 __host__ __device__
 float value(node const&);

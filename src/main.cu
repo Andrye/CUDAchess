@@ -11,8 +11,8 @@ const int DEPTH = 5;
 unsigned int get_bots_move(node const&);
 
 
-node launchKernel(node const& current_node){
-    const int n_threads = 1024;
+float launchKernel(node const& current_node){
+    const int n_threads = n_children;
 
     node* nodes = new node[n_threads];
     for(int i = 0; i < n_threads; i++){
@@ -22,14 +22,18 @@ node launchKernel(node const& current_node){
     node *dev_nodes;
     float* dev_values;
 
-    cudaMalloc((void**) &dev_values, sizeof(float) * n_threads);
-    cudaMalloc((void**) &dev_nodes, sizeof(node) * n_threads); //TODO: so far I decided that it indeed should be n_threads, not n_blocks. We'll see later.
+    cudaMalloc((void**) &dev_values, sizeof(float) * 1024/*n_threads*/);
+    cudaMalloc((void**) &dev_nodes, sizeof(node) * 1024/*n_threads*/); //TODO: so far I decided that it indeed should be n_threads, not n_blocks. We'll see later.
     cudaMemcpy(dev_nodes, nodes, sizeof(node) * n_threads, cudaMemcpyHostToDevice);
-    dim3 numThreads(n_threads, n_children, 1);
+    dim3 numThreads(n_threads, 1/*n_children*/, 1);
 
-    node best_move;
+    unsigned int best_move;
     alpha_beta(dev_nodes, dev_values, current_node, DEPTH, n_children, &best_move, numThreads); //TODO: for now it's cudaDeviceSynchronize();
+    
     delete[] nodes;
+    cudaFree((void**) &dev_values);
+    cudaFree((void**) &dev_nodes); //TODO: so far I decided that it indeed should be n_threads, not n_blocks. We'll see later.
+    
     return best_move;
 }
 
@@ -43,7 +47,10 @@ int main(){
 	    else
 	        move = get_bots_move(nodes[i]);
 	    if(!get_child(nodes[i], move, nodes+1-i))
-	        throw "Wrong move returned";
+        {
+            printf("move wrong %d\n", move);
+            throw "Wrong move returned";
+        }
     }
     printf("Implement me\n");
     return 0;
@@ -53,9 +60,10 @@ int main(){
 
 unsigned int get_bots_move(node const &n)
 {
-    node next_node = launchKernel(n);
-    for(unsigned int i = 0; i < n_children; i++)
+    return launchKernel(n);
+    /*for(unsigned int i = 0; i < n_children; i++)
         if(get_child(n, i, nullptr))
             return i;
     throw "no move can be done";
+*/
 }

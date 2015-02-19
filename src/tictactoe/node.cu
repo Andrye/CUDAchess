@@ -4,6 +4,8 @@
 #include <iostream>
 #include "node.h"
 
+extern const float INF = 1600000000;
+extern const float NODE_INACCESSIBLE = -INF;
 
 __host__
 std::ostream &operator <<(std::ostream &os, node const &n){
@@ -151,13 +153,13 @@ __host__ __device__
 float value(node const& n){
     int stats[9] = {};
     line_stats(n, stats);
-    if(stats[4]) return 1;
-    if(stats[8]) return -1;
+    if(stats[4]) return INF;
+    if(stats[8]) return -INF;
     float c = 1.;
     float v = 0;
     for(int i = 1; i <= 4; i++){
         v += c * (stats[i] - stats[i + 4]);
-        c *= 3;
+        c *= 152;
     }
     return v;
 }
