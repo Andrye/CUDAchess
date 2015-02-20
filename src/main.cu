@@ -22,8 +22,8 @@ float launchKernel(node const& current_node){
     node *dev_nodes;
     float* dev_values;
 
-    cudaMalloc((void**) &dev_values, sizeof(float) * 1024/*n_threads*/);
-    cudaMalloc((void**) &dev_nodes, sizeof(node) * 1024/*n_threads*/); //TODO: so far I decided that it indeed should be n_threads, not n_blocks. We'll see later.
+    cudaMalloc((void**) &dev_values, sizeof(float) * n_threads); //after we incorporate scan, this array should be moved to shared memeory
+    cudaMalloc((void**) &dev_nodes, sizeof(node) * n_threads); //unused. According to Sewcio should be * n_blocks not n_children
     cudaMemcpy(dev_nodes, nodes, sizeof(node) * n_threads, cudaMemcpyHostToDevice);
     dim3 numThreads(n_threads, 1/*n_children*/, 1);
 
