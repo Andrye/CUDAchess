@@ -9,10 +9,10 @@
 const int DEPTH = 5;
 
 unsigned int get_bots_move(node const&);
-
+unsigned int get_alpha_beta_gpu_move(node const&);
 
 unsigned int launchKernel(node const& current_node){
-    const int n_threads = n_children;
+    const int n_threads = N_CHILDREN;
 
     node* nodes = new node[n_threads];
     for(int i = 0; i < n_threads; i++){
@@ -28,7 +28,7 @@ unsigned int launchKernel(node const& current_node){
     dim3 numThreads(n_threads, 1/*n_children*/, 1);
 
     unsigned int best_move;
-    alpha_beta(dev_nodes, dev_values, current_node, DEPTH, n_children, &best_move, numThreads); //TODO: for now it's cudaDeviceSynchronize();
+    alpha_beta(dev_nodes, dev_values, current_node, DEPTH, &best_move, numThreads); //TODO: for now it's cudaDeviceSynchronize();
     
     delete[] nodes;
     cudaFree((void**) &dev_values);
@@ -45,7 +45,7 @@ int main(){
 	    if(i==0)
 	        move = get_console_move(nodes[i]);
 	    else
-	        move = get_bots_move(nodes[i]);
+	        move = get_alpha_beta_gpu_move(nodes[i]);
 	    if(!get_child(nodes[i], move, nodes+1-i))
         {
             printf("move wrong %d\n", move);

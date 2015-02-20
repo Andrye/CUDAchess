@@ -7,10 +7,12 @@ struct node;
 
 #include "node_implementation.h"
 
+#ifndef N_CHILDREN
+#error N_CHILDREN not defined in node_implementation.h
+#endif
 
 std::ostream &operator<<(std::ostream &osn, node const&);
 
-extern const int n_children;
 
 unsigned int get_console_move(node const&);
 
