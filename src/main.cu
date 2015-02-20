@@ -11,7 +11,7 @@ const int DEPTH = 5;
 unsigned int get_bots_move(node const&);
 
 
-float launchKernel(node const& current_node){
+unsigned int launchKernel(node const& current_node){
     const int n_threads = n_children;
 
     node* nodes = new node[n_threads];
