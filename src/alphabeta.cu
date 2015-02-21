@@ -152,9 +152,11 @@ void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits){
 
     int thid = threadIdx.x;
     int blid = blockIdx.x;
-    //int counter = 0;
+    int counter = 0;
     node local_node;
     float ret;
+
+    valid_children[thid] = 0;
 
 
     
@@ -169,6 +171,7 @@ void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits){
         if(blid == 0 && thid == 0) printf("alfabeta(%f,%f,(%lx,%lx),%d) initial call", stacklast->limits.b,stacklast->limits.a,stacklast->current_node.os, stacklast->current_node.xs, stacklast->color);
     }
     __syncthreads();
+    if(blid == 0) printf("thread=%d counter=%d line=%d\n", thid, counter++, __LINE__);
     while(stacklast >= stack){
         if(thid == 0){
             toContinue = false;
@@ -203,6 +206,7 @@ void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits){
             
             for(int d = 1; d < N_CHILDREN; d <<= 1){
                 __syncthreads();
+		if(blid == 0)printf("thread=%d counter=%d line=%d\n", thid, counter++, __LINE__);
                 if((thid & d) == 0 && (thid | d) < N_CHILDREN){ // find min of these values
                     float val = children_values[thid | d];
                     if (val < children_values[thid])
@@ -218,6 +222,8 @@ void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits){
         }
 
         __syncthreads();
+	if(blid == 0)printf("thread=%d counter=%d line=%d\n", thid, counter++, __LINE__);
+
 
         if(toContinue){
             continue;
@@ -233,6 +239,7 @@ void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits){
 	    
 	    //if(blid == 0) printf("%d %d vs[%d]=%x\n", counter++, blid, thid, valid_children[thid]);
 	    __syncthreads();
+	    if(blid == 0) printf("thread=%d counter=%d line=%d\n", thid, counter++, __LINE__);
 
 	    if(blid == 0 && thid == 0){
 	      for(int i = 0; i < N_CHILDREN; i++){
@@ -244,12 +251,14 @@ void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits){
 
             //note that no syncthreading is needed below - communication is within warp;
             for(int d = 1; d < 8; d <<= 1){
-                if((thid & d) == 0 && (thid | d) < N_CHILDREN)
+	      if((thid & d) == 0 && (thid | d) < N_CHILDREN){
                     valid_children[thid] = valid_children[thid] | valid_children[thid | d];
+	      }
             }
             if(thid & 7 == 0)
                 stacklast->valid_children[thid >> 3] = valid_children[thid];
 	    __syncthreads();
+	    if(blid == 0) printf("thread=%d counter=%d line=%d\n", thid, counter++, __LINE__);
 	    if(thid == 0 && blid == 0){
 	      for(int i = 0; i < N_CHILDREN; i++) printf("%d", (valid_children[i/8] >> (i% 8)) & 1);
 	      printf("\n");
@@ -267,6 +276,8 @@ void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits){
         }
 
         __syncthreads();
+	if(blid == 0) printf("thread=%d counter=%d line=%d\n", thid, counter++, __LINE__);
+
         if(thid == 0){
             int idx = stacklast->idx;
             //find valid idx
@@ -291,6 +302,7 @@ void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits){
             }
         }
         __syncthreads();
+	if(blid == 0) printf("thread=%d counter=%d line=%d\n", thid, counter++, __LINE__);
 
 
 
