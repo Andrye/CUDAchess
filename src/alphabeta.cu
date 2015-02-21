@@ -1,5 +1,6 @@
 #include "alphabeta.h"
 #include <algorithm>
+#include <iostream>
 #include <stdio.h>
 
 
@@ -132,17 +133,26 @@ float alpha_beta(node * nodes, float * d_values, node const &current_node, unsig
 }
 
 const int MAX_STACK_SIZE = 10;
+
+__device__
+bool atmost1bit(unsigned char c){
+  if(c == 0x0 || c == 0x1 || c == 0x2 || c == 0x4 || c == 0x8 || c == 0x10 || c == 0x20 || c == 0x40 || c == 0x80) return true;
+  printf("morethan1bit %x\n", c);
+  return false;
+}
+
 __global__ 
 void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits){
 
     __shared__ stack_entry stack[MAX_STACK_SIZE];
     __shared__ stack_entry* stacklast;
-    __shared__ char valid_children[N_CHILDREN];
+    __shared__ unsigned int valid_children[N_CHILDREN];
     __shared__ bool toContinue;
     __shared__ float children_values[N_CHILDREN];
 
     int thid = threadIdx.x;
     int blid = blockIdx.x;
+    //int counter = 0;
     node local_node;
     float ret;
 
@@ -154,24 +164,38 @@ void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits){
         stack[0].current_node = nodes[blid];
         stack[0].color = 1;
         stack[0].idx = 0;
+
         stacklast = stack;
+        if(blid == 0 && thid == 0) printf("alfabeta(%f,%f,(%lx,%lx),%d) initial call", stacklast->limits.b,stacklast->limits.a,stacklast->current_node.os, stacklast->current_node.xs, stacklast->color);
     }
     __syncthreads();
     while(stacklast >= stack){
         if(thid == 0){
             toContinue = false;
+	    if(stacklast->current_node.os & stacklast->current_node.xs){
+	      if(blid == 0 && thid == 0) printf("This is wrong %lx %lx\n", stacklast->current_node.os, stacklast->current_node.xs);
+	    }
         }
 
         if(thid == 0 && is_terminal(stacklast->current_node)){ // if current node is terminal
+            if(blid == 0) printf("node is terminal\n");
             float val = stacklast->color * value(stacklast->current_node);
+            if(blid == 0) printf("val = %f\n", val);
             ret = val;
             toContinue = true;
         } else if(stacklast == stack + depth){ // if max depth reached
+	  if(blid == 0 && thid == 0) printf("max depth reached.\n");
             
             if(get_child(stacklast->current_node, thid, &local_node)){ // find values of children
                 children_values[thid] = value(local_node);
             } else {
                 children_values[thid] = INF;
+            }
+            __syncthreads();
+            if(blid == 0 && thid == 0){
+	      printf("children values: ");
+                for(int i = 0; i < N_CHILDREN; i++) printf("%f ", children_values[i]);
+                printf("\n");
             }
             
             for(int d = 1; d < N_CHILDREN; d <<= 1){
@@ -183,17 +207,12 @@ void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits){
                 }
             }
 
-            if(thid == 0)
+            if(thid == 0){
                 ret = children_values[0];
+                if(blid == 0)printf("min = %f\n", ret);
+            }
 
             toContinue = true;
-        } else { // we've just returned from recursion.
-            if(-ret > stacklast->limits.a){
-                stacklast->limits.a = -ret;
-            }
-            if(stacklast->limits.a >= stacklast->limits.b){
-                stacklast->idx = N_CHILDREN;
-            }
         }
 
         __syncthreads();
@@ -203,10 +222,23 @@ void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits){
         }
         
         if(stacklast->idx == 0){ // if this is the first time we are at current node
+            if(blid == 0 && thid == 0) printf("first time in the node\n");
             bool has_child = get_child(stacklast->current_node, thid, nullptr) ? (thid & 0xf) : 0;
             // we want to calculate bit mask of valid children. First we will find singleton masks
             // and then we will run (bitwise or)-scan.
-            valid_children[thid] = has_child ? 1 << (thid & 7) : 0;
+            valid_children[thid] = has_child ? (1 << (thid & 7)) : 0;
+	    if(blid == 0)printf("vc[%d] = %x\n", thid, 0xff & valid_children[thid]);
+	    
+	    //if(blid == 0) printf("%d %d vs[%d]=%x\n", counter++, blid, thid, valid_children[thid]);
+	    __syncthreads();
+
+	    if(blid == 0 && thid == 0){
+	      for(int i = 0; i < N_CHILDREN; i++){
+
+		printf("vc[%d]=%x ", i, 0xff & valid_children[i]);
+	      }
+	      printf("\n");
+	    }
 
             //note that no syncthreading is needed below - communication is within warp;
             for(int d = 1; d < 8; d <<= 1){
@@ -215,7 +247,23 @@ void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits){
             }
             if(thid & 7 == 0)
                 stacklast->valid_children[thid >> 3] = valid_children[thid];
+	    __syncthreads();
+	    if(thid == 0 && blid == 0){
+	      for(int i = 0; i < N_CHILDREN; i++) printf("%d", (valid_children[i/8] >> (i% 8)) & 1);
+	      printf("\n");
+	    }
+        } else { // we've just returned from recursion.
+	  if(thid == 0 && blid == 0) printf("just returned from recursion\n");
+            if(thid == 0 && -ret > stacklast->limits.a){
+                stacklast->limits.a = -ret;
+		if(blid == 0) printf("now alpha = %f\n", stacklast->limits.a);
+            }
+            if(stacklast->limits.a >= stacklast->limits.b){
+                stacklast->idx = N_CHILDREN;
+            }
+
         }
+
         __syncthreads();
         if(thid == 0){
             int idx = stacklast->idx;
@@ -224,10 +272,11 @@ void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits){
                 idx++;
 
             if(idx == N_CHILDREN){ // if all children searched - return from recursion
-                ret = limits.a;
+	      if(blid == 0) printf("return %f\n", stacklast->limits.a);
+                ret = stacklast->limits.a;
                 stacklast--;
             } else { // otherwise search children.
-
+                
                 (stacklast+1)->limits.a = -stacklast->limits.b;
                 (stacklast+1)->limits.b = -stacklast->limits.a;
                 get_child(stacklast->current_node, idx, &(stacklast+1)->current_node);
@@ -236,26 +285,28 @@ void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits){
 
                 stacklast->idx = ++idx;
                 stacklast++;
+                if(blid == 0 || thid == 0) printf("alfabeta(%f,%f,(%lx,%lx),%d)", stacklast->limits.b,stacklast->limits.a,stacklast->current_node.os, stacklast->current_node.xs, stacklast->color);
             }
         }
         __syncthreads();
 
 
-    }
 
-    values[blid] = ret;
+    }
+    if(thid == 0)
+      values[blid] = ret;
 }
 
 unsigned int get_alpha_beta_gpu_move(node const &n){
     
-    const int depth = 3;
-    bool is_node[N_CHILDREN];
+    const int depth = 2;
+    unsigned int moves[N_CHILDREN];
     node nodes[N_CHILDREN];
     int children_cnt = 0;
     
-    for(int i = 0; i < N_CHILDREN; i++){
-        if(is_node[i] = get_child(n, i, &nodes[children_cnt]))
-            children_cnt++;
+    for(unsigned int i = 0; i < N_CHILDREN; i++){
+        if(get_child(n, i, &nodes[children_cnt]))
+            moves[children_cnt++] = i;
     }
     
     node* dev_nodes;
@@ -267,14 +318,12 @@ unsigned int get_alpha_beta_gpu_move(node const &n){
     alpha_beta_gpu<<<children_cnt, num_threads>>>(dev_nodes, dev_values, depth, AB(-INF, INF));
     float values[children_cnt];
     cudaMemcpy(values, dev_values, sizeof(float) * children_cnt, cudaMemcpyDeviceToHost);
-    int best = std::min_element(values, values + children_cnt) - values;
     cudaFree((void**) &dev_values);
     cudaFree((void**) &dev_nodes);
-    for(int i = 0; i < N_CHILDREN; i++){
-        if(is_node[i] && (--children_cnt == 0))
-            return i;
-    }
-    throw "that aint gonna happen";
+    std::cout << children_cnt << " moves" << std::endl;
+    for(int i = 0; i < children_cnt; i++) std::cout << moves[i] << " : " << values[i] << " "; std::cout << std::endl;
+    int best = std::min_element(values, values + children_cnt) - values;
+    return moves[best];
 }
 
 

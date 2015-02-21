@@ -84,12 +84,14 @@ int popcount(uint64_t x){
 
 __host__ __device__
 bool get_child(node const& parent, unsigned int id, node *d_child){
+     assert(!(parent.os & parent.xs));
     if(((parent.xs | parent.os) >> id) & 1){
         return false;
     }
     if(d_child != nullptr){
         d_child->os = parent.xs;
         d_child->xs = parent.os + (((uint64_t)1) << id);
+	assert(!(d_child->os & d_child->xs));
     }
     return true;
 }
@@ -164,9 +166,8 @@ float value(node const& n){
     return v;
 }
 
-__host__
+__host__ __device__
 bool is_terminal(node const &n){
-    assert((n.xs & n.os) == 0);
     if(popcount(n.xs | n.os) == 64) return true;
     int stats[9] = {};
     line_stats(n, stats);
