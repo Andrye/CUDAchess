@@ -2,10 +2,11 @@
 #include <cstdint>
 #include <cstdio>
 #include <iostream>
+#include <limits>
 #include "node.h"
 
-extern const float INF = 1600000000;
-extern const float NODE_INACCESSIBLE = -INF;
+const float INF = std::numeric_limits<float>::infinity();
+
 
 __host__
 std::ostream &operator <<(std::ostream &os, node const &n){

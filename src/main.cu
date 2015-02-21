@@ -40,7 +40,8 @@ unsigned int launchKernel(node const& current_node){
 int main(){
     node nodes[2];
     nodes[0] = {};
-    for(int i = 0; !is_terminal(nodes[i]); i=1-i){
+    int i;
+    for(i = 0; !is_terminal(nodes[i]); i=1-i){
         unsigned int move;
 	    if(i==0)
 	        move = get_console_move(nodes[i]);
@@ -52,7 +53,7 @@ int main(){
             throw "Wrong move returned";
         }
     }
-    printf("Implement me\n");
+    std::cout << "GAME OVER" << std::endl << nodes[i];
     return 0;
 }
 
