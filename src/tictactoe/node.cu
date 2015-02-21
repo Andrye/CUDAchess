@@ -10,6 +10,9 @@ const float INF = std::numeric_limits<float>::infinity();
 
 __host__
 std::ostream &operator <<(std::ostream &os, node const &n){
+  bool oplayer = (__builtin_popcountll(n.xs | n.os) % 2 == 0);
+  char O = oplayer ? 'O' : 'X';
+  char X = 'O' ^ 'X' ^ O;
     for(int x = 0; x < 4; x++) os << "x" << x << ":                  "; os << "\n";
     for(int x = 0; x < 4; x++) os <<"    y0  y1  y2  y3   "; os << "\n";
     char const* h = "  +---+---+---+---+  ";
@@ -19,7 +22,7 @@ std::ostream &operator <<(std::ostream &os, node const &n){
             os << "z" << z;
             for(int y = 0; y < 4; y++){
                 int bit = x + 4 * y + 16 * z;
-                os << "| " << ((n.xs>>bit &1)?'X':((n.os>>bit)&1)?'O':' ') << " ";
+                os << "| " << ((n.xs>>bit &1)?X:((n.os>>bit)&1)?O:' ') << " ";
             }
             os << "|  ";
         }
