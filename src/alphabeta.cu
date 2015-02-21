@@ -177,12 +177,15 @@ void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits){
 	    }
         }
 
-        if(thid == 0 && is_terminal(stacklast->current_node)){ // if current node is terminal
+        if(is_terminal(stacklast->current_node)){ // if current node is terminal
+	  if(thid == 0){
             if(blid == 0) printf("node is terminal\n");
             float val = stacklast->color * value(stacklast->current_node);
             if(blid == 0) printf("val = %f\n", val);
             ret = val;
+	    stacklast--;
             toContinue = true;
+	  }
         } else if(stacklast == stack + depth){ // if max depth reached
 	  if(blid == 0 && thid == 0) printf("max depth reached.\n");
             
@@ -191,7 +194,7 @@ void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits){
             } else {
                 children_values[thid] = INF;
             }
-            __syncthreads();
+
             if(blid == 0 && thid == 0){
 	      printf("children values: ");
                 for(int i = 0; i < N_CHILDREN; i++) printf("%f ", children_values[i]);
@@ -210,9 +213,8 @@ void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits){
             if(thid == 0){
                 ret = children_values[0];
                 if(blid == 0)printf("min = %f\n", ret);
-            }
-
-            toContinue = true;
+		toContinue = true;
+	    }
         }
 
         __syncthreads();
