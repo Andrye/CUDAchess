@@ -3,7 +3,7 @@
 #include <iostream>
 #include <limits>
 #include <cstdio>
-
+#include <chrono>
 
 /********** Note that, unlike theearly versions, every funtion returns the value of node X
             for the player who is on the move in node X. It it a calling function's responsibility to invert
@@ -349,12 +349,14 @@ float alpha_beta_cpu(node const& n, unsigned int depth, AB limits){
 }
 
 unsigned int get_alpha_beta_gpu_move(node const &n){
-    
-  const int depth = 2;
+    const int depth = 2;
     unsigned int moves[N_CHILDREN];
     node nodes[N_CHILDREN];
     int children_cnt = 0;
     
+    std::chrono::time_point<std::chrono::system_clock> start, end;
+    start = std::chrono::system_clock::now();
+ 
     for(unsigned int i = 0; i < N_CHILDREN; i++){
         if(get_child(n, i, &nodes[children_cnt]))
             moves[children_cnt++] = i;
@@ -377,9 +379,14 @@ unsigned int get_alpha_beta_gpu_move(node const &n){
       values[i] = alpha_beta_cpu(nodes[i], depth, ab);
     }
     int best = std::min_element(values, values + children_cnt) - values;
+    
+    end = std::chrono::system_clock::now();
+    std::chrono::duration<double> elapsed_seconds = end-start;
+    std::time_t end_time = std::chrono::system_clock::to_time_t(end);
+ 
+    std::cout << "GPU generation time : " << elapsed_seconds.count() << "s\n";
     return moves[best];
 }
-
 
 __global__
 void compute_children_of_a_node (node *nodes, float *values, node * current_node, unsigned int depth, AB limit)
