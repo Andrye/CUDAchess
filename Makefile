@@ -26,6 +26,8 @@ NVCCFLAGS += $(COMMONFLAGS) $(NVCCOPTIONS)
 %:  %.main.cu.o %.alphabeta.cu.o %.node.cu.o
 	$(NVCC) $(NVCCFLAGS) $*.node.cu.o $*.alphabeta.cu.o $*.main.cu.o -o $@.x
 
+.PHONY: clean
+
 clean:
 	rm -rf *.x *.o
 
