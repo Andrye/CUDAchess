@@ -137,7 +137,7 @@ const int MAX_STACK_SIZE = 10;
 
 #define DEBUG if(0)
 __global__ 
-void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits){
+void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits_){
 
     __shared__ stack_entry stack[MAX_STACK_SIZE];
     __shared__ stack_entry* stacklast;
@@ -173,7 +173,7 @@ void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits){
     
     if(thid == 0){
 
-        stack[0].limits = limits;
+        stack[0].limits = limits_;
         stack[0].current_node = nodes[blid];
         stack[0].idx = 0;
 
@@ -280,7 +280,7 @@ void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits){
                 stacklast->limits.a = -ret;
 		DEBUG printf("%d now alpha = %f\n", blid, stacklast->limits.a);
             }
-            if(stacklast->limits.a >= stacklast->limits.b){
+            if(stacklast->limits.a >= stacklast->limits.b){ //pruning
                 stacklast->idx = N_CHILDREN;
             }
 
@@ -320,6 +320,34 @@ void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits){
       values[blid] = ret;
 }
 
+__host__ __device__
+float alpha_beta_cpu(node const& n, unsigned int depth, AB limits){
+  node c;
+  if(is_terminal(n))
+    return value(n);
+  if(depth == 0){
+    float min_val = INF;
+    for(int i = 0; i < N_CHILDREN; i++){
+      if(get_child(n, i, &c)){
+	float val = value(c);
+	if(val < min_val)
+	  min_val = val;
+      }
+    }
+    return -min_val;
+  }
+  for(int i = 0; i < N_CHILDREN; i++){
+    if(get_child(n, i, &c)){
+      float val = alpha_beta_cpu(c, depth-1, AB(-limits.b, -limits.a));
+      if(val > limits.a)
+	limits.a = val;
+      if(limits.a > limits.b)
+	break;
+    }
+  }
+  return limits.a;
+}
+
 unsigned int get_alpha_beta_gpu_move(node const &n){
     
   const int depth = 2;
@@ -332,7 +360,7 @@ unsigned int get_alpha_beta_gpu_move(node const &n){
             moves[children_cnt++] = i;
     }
     
-    node* dev_nodes;
+    /*node* dev_nodes;
     float* dev_values;
     cudaMalloc((void**) &dev_nodes, sizeof(node) * children_cnt);
     cudaMalloc((void**) &dev_values, sizeof(float) * children_cnt);
@@ -342,7 +370,12 @@ unsigned int get_alpha_beta_gpu_move(node const &n){
     float values[children_cnt];
     cudaMemcpy(values, dev_values, sizeof(float) * children_cnt, cudaMemcpyDeviceToHost);
     cudaFree((void**) &dev_values);
-    cudaFree((void**) &dev_nodes);
+    cudaFree((void**) &dev_nodes);*/
+    float values[children_cnt];
+    AB ab(-INF, INF);
+    for(int i = 0; i < children_cnt; i++){
+      values[i] = alpha_beta_cpu(nodes[i], depth, ab);
+    }
     int best = std::min_element(values, values + children_cnt) - values;
     return moves[best];
 }

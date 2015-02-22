@@ -43,8 +43,9 @@ int main(){
     int i;
     for(i = 0; !is_terminal(nodes[i]); i=1-i){
         unsigned int move;
+	std::cout << nodes[i] << std::endl;
 	    if(i==0)
-	        move = get_console_move(nodes[i]);
+	        move = get_alpha_beta_gpu_move(nodes[i]);
 	    else
 	        move = get_alpha_beta_gpu_move(nodes[i]);
 	    if(!get_child(nodes[i], move, nodes+1-i))
