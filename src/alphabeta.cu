@@ -427,8 +427,8 @@ unsigned int get_alpha_beta_cpu_move(node const &n){
     node nodes[N_CHILDREN];
     int children_cnt = 0;
 
-    std::chrono::time_point<std::chrono::system_clock> start, end;
-    start = std::chrono::system_clock::now();
+    //std::chrono::time_point<std::chrono::system_clock> start, end;
+    //start = std::chrono::system_clock::now();
 
     for(unsigned int i = 0; i < N_CHILDREN; i++){
         if(get_child(n, i, &nodes[children_cnt]))
@@ -441,11 +441,11 @@ unsigned int get_alpha_beta_cpu_move(node const &n){
     }
     int best = std::min_element(values, values + children_cnt) - values;
 
-    end = std::chrono::system_clock::now();
-    std::chrono::duration<double> elapsed_seconds = end-start;
-    std::time_t end_time = std::chrono::system_clock::to_time_t(end);
+    //end = std::chrono::system_clock::now();
+    //std::chrono::duration<double> elapsed_seconds = end-start;
+    //std::time_t end_time = std::chrono::system_clock::to_time_t(end);
 
-    std::cout << "CPU generation time : " << elapsed_seconds.count() << "s\n";
+    //std::cout << "CPU generation time : " << elapsed_seconds.count() << "s\n";
     return moves[best];
 }
 
