@@ -422,7 +422,7 @@ unsigned int get_alpha_beta_gpu_move(node const &n){
     return moves[best];
 }
 unsigned int get_alpha_beta_cpu_move(node const &n){
-    const int depth = 2;
+    const int depth = DEPTH - 2;
     unsigned int moves[N_CHILDREN];
     node nodes[N_CHILDREN];
     int children_cnt = 0;
