@@ -6,7 +6,7 @@
 #include <iostream>
 #include <vector>
 
-const int DEPTH = 5;
+const int DEPTH = 3;
 
 unsigned int get_bots_move(node const&);
 unsigned int get_alpha_beta_gpu_move(node const&);
@@ -43,10 +43,11 @@ int main(){
     int i;
     for(i = 0; !is_terminal(nodes[i]); i=1-i){
         unsigned int move;
-	    if(i==0)
-	        move = get_console_move(nodes[i]);
-	    else
-	        move = get_alpha_beta_gpu_move(nodes[i]);
+	//    if(i==0)
+	  //      move = get_console_move(nodes[i]);
+	   // else
+	  //      move = get_alpha_beta_gpu_move(nodes[i]);
+	    move = get_bots_move(nodes[i]);
 	    if(!get_child(nodes[i], move, nodes+1-i))
         {
             printf("move wrong %d\n", move);

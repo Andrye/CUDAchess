@@ -5,6 +5,8 @@
 #include <cstdio>
 #include <chrono>
 
+#define CUDA 0
+
 /********** Note that, unlike theearly versions, every funtion returns the value of node X
             for the player who is on the move in node X. It it a calling function's responsibility to invert
             the value. This should only be changed consistently everywhere in this file.
@@ -37,10 +39,14 @@ struct stack_entry {
 
 };
 
+#if CUDA
 __global__
-void compute_children_of_a_node (node *nodes, float *dev_values, node * current_node, unsigned int depth, AB limit);
+#endif
+void compute_children_of_a_node (node *nodes, float *dev_values, const node * current_node, unsigned int depth, AB limit);
 
+#if CUDA
 __device__
+#endif
 float compute_node(node const &current_node, unsigned int depth, AB limit);
 
 __host__
@@ -72,7 +78,9 @@ float alpha_beta(node * nodes, float * d_values, node const &current_node, unsig
 
 
 	node child;
-	
+    float * values = new float[N_CHILDREN]; //it'll be done better in the future,
+
+#if CUDA	
 	int __index_of_recursive_estimation; //this variable can probably be deleted in the final version, but is crucial untill GPU has recursion as well as CPU
 	for (int i=0; i<N_CHILDREN; i++)     //it should be sort, shouldn't it?
         if(get_child(current_node, i, &child))
@@ -83,7 +91,6 @@ float alpha_beta(node * nodes, float * d_values, node const &current_node, unsig
 
 	float limit_estimation = invert( alpha_beta(nodes, d_values, child, depth - 1, nullptr, numThreads) );
     
-    float * values = new float[N_CHILDREN]; //it'll be done better in the future,
     
     node * dev_current_node;
     cudaMalloc((void**) &dev_current_node, sizeof(node));
@@ -108,13 +115,19 @@ float alpha_beta(node * nodes, float * d_values, node const &current_node, unsig
         printf("cuda error  %d\n", cudaResult);
         throw 1;
     }
+#else
+	compute_children_of_a_node (nodes, values, &current_node, depth, AB(-INF, INF));
+    
+#endif
+
 	int best_ind = get_best_index(values);
 	float result = values[best_ind];
 	
     /******** can be deleted in the final version ********/
+#if CUDA
     if(result <= limit_estimation)
         best_ind = __index_of_recursive_estimation;
-            
+#endif            
 	/*if(best_move != nullptr)
     {
         //don't look at this code, it's stupid. But I want to finish it now
@@ -122,7 +135,9 @@ float alpha_beta(node * nodes, float * d_values, node const &current_node, unsig
     }*/
 
 	delete[] values;
-	cudaFree(dev_current_node);
+#if CUDA
+    cudaFree(dev_current_node);
+#endif	
 	if(best_move_value != nullptr)
 	    *best_move_value = best_ind;
 	
@@ -355,26 +370,34 @@ unsigned int get_alpha_beta_gpu_move(node const &n){
     return moves[best];
 }
 
+#if CUDA
 __global__
-void compute_children_of_a_node (node *nodes, float *values, node * current_node, unsigned int depth, AB limit)
+#endif
+void compute_children_of_a_node (node *nodes, float *values, const node * current_node, unsigned int depth, AB limit)
 {
+#if CUDA
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
     //int bl_id = blockIdx.x; //TODO: no blocks so far
     //int th_id = threadIdx.x;
+#endif
     
     node child;
     node * childptr = &child;
-    
-    if(get_child(*current_node, id, childptr))
-        values[id] = invert( compute_node(child, depth - 1, invert(limit)) );
-    else
-      values[id] =  -INF;
+#if !CUDA
+	for (int id=0; id < N_CHILDREN; id++)
+#endif
+		if(get_child(*current_node, id, childptr))
+			values[id] = invert( compute_node(child, depth - 1, invert(limit)) );
+		else
+		  values[id] =  -INF;
 }
 
+#if CUDA
 __device__
+#endif
 float compute_node(node const &current_node, unsigned int depth, AB limit)
 {
-	if(is_terminal(current_node))
+	if(depth == 0 || is_terminal(current_node))
 		return value(current_node);
 	
 	node child;
@@ -384,8 +407,12 @@ float compute_node(node const &current_node, unsigned int depth, AB limit)
 	{
 		if(!get_child(current_node, i, &child))
 		    continue;
+#if CUDA
 		float temp_res = invert(value(child)); //recursion here should be
-		
+#else
+		float temp_res = invert( compute_node(child, depth - 1, invert(limit)) );
+#endif
+
 		if(temp_res > best_res)
 		{
 			best_res = temp_res;
