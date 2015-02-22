@@ -4,12 +4,12 @@
 #include "node.h"
 #include <cstdint>
 #include <iostream>
+#include <map>
 #include <vector>
 
 const int DEPTH = 3;
 
 unsigned int get_bots_move(node const&);
-unsigned int get_alpha_beta_gpu_move(node const&);
 
 unsigned int launchKernel(node const& current_node){
     const int n_threads = N_CHILDREN;
@@ -37,17 +37,34 @@ unsigned int launchKernel(node const& current_node){
     return best_move;
 }
 
-int main(){
+
+typedef unsigned int (*strategy)(node const&);
+
+int main(int argc, char *argv[]){
+  std::map<std::string, strategy> players = {
+    {"stdin", get_console_move},
+    {"cpu", get_alpha_beta_cpu_move},
+    {"gpu", get_alpha_beta_gpu_move}
+  };
+  if(argc != 3 || !players.count(argv[1]) || !players.count(argv[2])){
+    std::cout << "Usage: " << argv[0] << " player1 player2" << std::endl;
+    std::cout << "\twhere player1, player 2 is one of:";
+    for(auto p : players) std::cout << " " << p.first;
+    std::cout << std::endl;
+    return 0;
+  }
+  auto player1 = players[argv[1]];
+  auto player2 = players[argv[2]];
     node nodes[2];
     nodes[0] = {};
     int i;
     for(i = 0; !is_terminal(nodes[i]); i=1-i){
         unsigned int move;
-	//    if(i==0)
-	  //      move = get_console_move(nodes[i]);
-	   // else
-	  //      move = get_alpha_beta_gpu_move(nodes[i]);
-	    move = get_bots_move(nodes[i]);
+	std::cout << nodes[i] << "Node value: " << value(nodes[i]) << std::endl;
+	    if(i==0)
+	        move = player1(nodes[i]);
+	    else
+	        move = player2(nodes[i]);
 	    if(!get_child(nodes[i], move, nodes+1-i))
         {
             printf("move wrong %d\n", move);
