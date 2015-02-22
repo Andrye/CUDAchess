@@ -32,7 +32,6 @@ struct stack_entry {
 
     AB limits;
     node current_node;
-    int color;
     int idx; // id of child to be searched.
     char valid_children[(N_CHILDREN + 7) / 8]; // bit mask of valid children
 
@@ -176,32 +175,31 @@ void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits){
 
         stack[0].limits = limits;
         stack[0].current_node = nodes[blid];
-        stack[0].color = 1;
         stack[0].idx = 0;
 
         stacklast = stack;
-        DEBUG printf("alfabeta(%f,%f,(%lx,%lx),%d) initial call\n", stacklast->limits.b,stacklast->limits.a,stacklast->current_node.os, stacklast->current_node.xs, stacklast->color);
+        DEBUG printf("%d alfabeta(%f,%f,(%lx,%lx)) initial call\n", blid, stacklast->limits.b,stacklast->limits.a,stacklast->current_node.os, stacklast->current_node.xs);
     }
     __syncthreads();
     while(stacklast >= stack){
         if(thid == 0){
             toContinue = false;
 	    if(stacklast->current_node.os & stacklast->current_node.xs){
-	      DEBUG printf("This is wrong %lx %lx\n", stacklast->current_node.os, stacklast->current_node.xs);
+	      DEBUG printf("%d This is wrong %lx %lx\n", blid, stacklast->current_node.os, stacklast->current_node.xs);
 	    }
         }
 
         if(is_terminal(stacklast->current_node)){ // if current node is terminal
 	  if(thid == 0){
-            DEBUG printf("node is terminal\n");
-            float val = stacklast->color * value(stacklast->current_node);
-            DEBUG printf("val = %f\n", val);
+            DEBUG printf("%d node is terminal\n", blid);
+            float val = value(stacklast->current_node);
+            DEBUG printf("%d val = %f\n", blid, val);
             ret = val;
 	    stacklast--;
             toContinue = true;
 	  }
         } else if(stacklast == stack + depth){ // if max depth reached
-	  DEBUG printf("max depth reached.\n");
+	  DEBUG printf("%d max depth reached.\n", blid);
             
             if(get_child(stacklast->current_node, thid, &local_node)){ // find values of children
                 children_values[thid] = value(local_node);
@@ -211,7 +209,7 @@ void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits){
 
 	    DEBUG {
 	      printf("%d children values: ", blid);
-	      for(int i = 0; i < N_CHILDREN; i++) printf("%d[%d]:%f ", blid, i, children_values[i]);
+	      for(int i = 0; i < N_CHILDREN; i++) printf("%d[%d]:%.0f ", blid, i, children_values[i]);
                 printf("\n");
             }
 	    __syncthreads();
@@ -231,7 +229,7 @@ void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits){
             if(thid == 0){
                 ret = -children_values[0];
 		stacklast--;
-                DEBUG printf("min = %f\n", ret);
+                DEBUG printf("%d min = %f (return)\n", blid, ret);
 		toContinue = true;
 	    }
         }
@@ -244,7 +242,7 @@ void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits){
         }
         
         if(stacklast->idx == 0){ // if this is the first time we are at current node
-            DEBUG printf("first time in the node\n");
+	  DEBUG printf("%d first time in the node\n", blid);
             bool has_child = get_child(stacklast->current_node, thid, nullptr) ? (thid & 0xf) : 0;
             // we want to calculate bit mask of valid children. First we will find singleton masks
             // and then we will run (bitwise or)-scan.
@@ -277,10 +275,10 @@ void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits){
 	    __syncthreads();
         } else { // we've just returned from recursion.
 
-	  DEBUG printf("just returned from recursion\n");
+	  DEBUG printf("%d just returned from recursion\n", blid);
             if(thid == 0 && -ret > stacklast->limits.a){
                 stacklast->limits.a = -ret;
-		DEBUG printf("now alpha = %f\n", stacklast->limits.a);
+		DEBUG printf("%d now alpha = %f\n", blid, stacklast->limits.a);
             }
             if(stacklast->limits.a >= stacklast->limits.b){
                 stacklast->idx = N_CHILDREN;
@@ -301,7 +299,7 @@ void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits){
 
 
             if(idx == N_CHILDREN){ // if all children searched - return from recursion
-	      DEBUG printf("return %f\n", stacklast->limits.a);
+	      DEBUG printf("%d return %f\n", blid, stacklast->limits.a);
                 ret = stacklast->limits.a;
                 stacklast--;
             } else { // otherwise search children.
@@ -309,12 +307,11 @@ void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits){
                 (stacklast+1)->limits.a = -stacklast->limits.b;
                 (stacklast+1)->limits.b = -stacklast->limits.a;
                 get_child(stacklast->current_node, idx, &(stacklast+1)->current_node);
-                (stacklast+1)->color = -stacklast->color;
                 (stacklast+1)->idx = 0;
 
                 stacklast->idx = ++idx;
                 stacklast++;
-                DEBUG printf("alfabeta(%f,%f,(%lx,%lx),%d)", stacklast->limits.b,stacklast->limits.a,stacklast->current_node.os, stacklast->current_node.xs, stacklast->color);
+                DEBUG printf("%d alfabeta(%f,%f,(%lx,%lx))\n", blid, stacklast->limits.b,stacklast->limits.a,stacklast->current_node.os, stacklast->current_node.xs);
             }
         }
         __syncthreads();
@@ -325,7 +322,7 @@ void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits){
 
 unsigned int get_alpha_beta_gpu_move(node const &n){
     
-    const int depth = 0;
+  const int depth = 2;
     unsigned int moves[N_CHILDREN];
     node nodes[N_CHILDREN];
     int children_cnt = 0;
