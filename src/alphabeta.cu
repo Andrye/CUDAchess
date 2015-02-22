@@ -65,6 +65,7 @@ AB invert (AB val)
 }
 
 
+
 /* nodes - unused till we implementbclocks
  * best_move - can be nullptr if we only want the numerical result
  */
@@ -121,6 +122,16 @@ float alpha_beta(node * nodes, float * d_values, node const &current_node, unsig
 #endif
 
 	int best_ind = get_best_index(values);
+	if(best_ind == -1)
+    {
+	    for (int i=0; i<N_CHILDREN; i++)     //it should be sort, shouldn't it?
+            if(get_child(current_node, i, &child))
+	        {
+	             best_ind = i;
+	             break;
+	        }
+	}
+       
 	float result = values[best_ind];
 	
     /******** can be deleted in the final version ********/
@@ -366,6 +377,16 @@ float alpha_beta_cpu(node const& n, unsigned int depth, AB limits){
   return best_val;
 }
 
+
+extern const int DEPTH;
+unsigned int get_alpha_beta_cpu_kk_move(const node& n)
+{
+    unsigned int res;
+    dim3 dm3_unused;
+    alpha_beta(nullptr, nullptr, n, DEPTH, &res, dm3_unused);
+    return res;
+}
+
 unsigned int get_alpha_beta_gpu_move(node const &n){
     const int depth = 2;
     unsigned int moves[N_CHILDREN];
@@ -447,7 +468,7 @@ void compute_children_of_a_node (node *nodes, float *values, const node * curren
 		if(get_child(*current_node, id, childptr))
 			values[id] = invert( compute_node(child, depth - 1, invert(limit)) );
 		else
-		  values[id] =  -INF;
+		    values[id] =  -INF;
 }
 
 #if CUDA
@@ -476,8 +497,9 @@ float compute_node(node const &current_node, unsigned int depth, AB limit)
 			best_res = temp_res;
 			if(temp_res > limit.a)
 			{
+			    limit.a = temp_res;
 				if(limit.a >= limit.b)
-					return INF; 	//alpha-beta prunning - out move is so greate we know B doesn't want
+					return best_res; 	//alpha-beta prunning - out move is so greate we know B doesn't want
 				                    //the parent node. We return INF though in fact best_res should be enough?
 	                                //EDIT friday morning. Now I think it should be only best_res, not INF. I'll reconsider it.
 
@@ -492,7 +514,7 @@ float compute_node(node const &current_node, unsigned int depth, AB limit)
 __host__
 int get_best_index(float * values)
 {
-	int res_index;
+	int res_index = -1;
 	float val = -1e10;
 	for (int i=0; i<N_CHILDREN; i++)
 	{

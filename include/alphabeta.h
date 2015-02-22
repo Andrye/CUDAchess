@@ -8,5 +8,6 @@ float alpha_beta(node * nodes, float * d_values, node const &current_node, unsig
 
 unsigned int get_alpha_beta_gpu_move(node const&);
 unsigned int get_alpha_beta_cpu_move(node const&);
+unsigned int get_alpha_beta_cpu_kk_move(node const&);
 
 #endif
