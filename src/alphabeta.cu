@@ -336,16 +336,19 @@ float alpha_beta_cpu(node const& n, unsigned int depth, AB limits){
     }
     return -min_val;
   }
+  float best_val = -INF;
   for(int i = 0; i < N_CHILDREN; i++){
     if(get_child(n, i, &c)){
-      float val = alpha_beta_cpu(c, depth-1, AB(-limits.b, -limits.a));
+      float val = -alpha_beta_cpu(c, depth-1, AB(-limits.b, -limits.a));
+      if(val > best_val)
+	best_val = val;
       if(val > limits.a)
 	limits.a = val;
-      if(limits.a > limits.b)
+      if(limits.a >= limits.b)
 	break;
     }
   }
-  return limits.a;
+  return best_val;
 }
 
 unsigned int get_alpha_beta_gpu_move(node const &n){
@@ -353,7 +356,7 @@ unsigned int get_alpha_beta_gpu_move(node const &n){
     unsigned int moves[N_CHILDREN];
     node nodes[N_CHILDREN];
     int children_cnt = 0;
-    
+
     std::chrono::time_point<std::chrono::system_clock> start, end;
     start = std::chrono::system_clock::now();
  
@@ -361,8 +364,8 @@ unsigned int get_alpha_beta_gpu_move(node const &n){
         if(get_child(n, i, &nodes[children_cnt]))
             moves[children_cnt++] = i;
     }
-    
-    /*node* dev_nodes;
+
+    node* dev_nodes;
     float* dev_values;
     cudaMalloc((void**) &dev_nodes, sizeof(node) * children_cnt);
     cudaMalloc((void**) &dev_values, sizeof(float) * children_cnt);
@@ -372,19 +375,41 @@ unsigned int get_alpha_beta_gpu_move(node const &n){
     float values[children_cnt];
     cudaMemcpy(values, dev_values, sizeof(float) * children_cnt, cudaMemcpyDeviceToHost);
     cudaFree((void**) &dev_values);
-    cudaFree((void**) &dev_nodes);*/
+    cudaFree((void**) &dev_nodes);
+    int best = std::min_element(values, values + children_cnt) - values;
+
+    end = std::chrono::system_clock::now();
+    std::chrono::duration<double> elapsed_seconds = end-start;
+    std::time_t end_time = std::chrono::system_clock::to_time_t(end);
+
+    std::cout << "GPU generation time : " << elapsed_seconds.count() << "s\n";
+    return moves[best];
+}
+unsigned int get_alpha_beta_cpu_move(node const &n){
+    const int depth = 2;
+    unsigned int moves[N_CHILDREN];
+    node nodes[N_CHILDREN];
+    int children_cnt = 0;
+
+    std::chrono::time_point<std::chrono::system_clock> start, end;
+    start = std::chrono::system_clock::now();
+
+    for(unsigned int i = 0; i < N_CHILDREN; i++){
+        if(get_child(n, i, &nodes[children_cnt]))
+            moves[children_cnt++] = i;
+    }
     float values[children_cnt];
     AB ab(-INF, INF);
     for(int i = 0; i < children_cnt; i++){
       values[i] = alpha_beta_cpu(nodes[i], depth, ab);
     }
     int best = std::min_element(values, values + children_cnt) - values;
-    
+
     end = std::chrono::system_clock::now();
     std::chrono::duration<double> elapsed_seconds = end-start;
     std::time_t end_time = std::chrono::system_clock::to_time_t(end);
- 
-    std::cout << "GPU generation time : " << elapsed_seconds.count() << "s\n";
+
+    std::cout << "CPU generation time : " << elapsed_seconds.count() << "s\n";
     return moves[best];
 }
 

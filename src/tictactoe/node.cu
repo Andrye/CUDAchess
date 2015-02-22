@@ -47,7 +47,6 @@ int parse_move(std::string const &line){
 }
 
 unsigned int get_console_move(node const &current_node){
-    std::cout << current_node << "node value:" << value(current_node) << std::endl;
     int move = -1;
     do {
         std::cout << "your move" << std::endl;
