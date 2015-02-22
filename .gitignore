@@ -31,3 +31,8 @@
 
 # CUDA
 *.ptx
+
+# Temporary files
+.*.swp
+*~
+*.tmp
