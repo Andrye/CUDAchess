@@ -14,6 +14,18 @@ NVCCFLAGS += $(COMMONFLAGS) $(NVCCOPTIONS)
 
 .SUFFIXES:	.cu	
 
+help:
+	@echo "CUDA alfa beta game project"
+	@echo "To build a game enter : "
+	@echo ""
+	@echo "\tmake <game name>"
+	@echo ""
+	@echo "Currently implemented games : "
+	@echo "\t- tictactoe"
+	@echo ""
+	@echo "To run a game enter : ./<game name>.x"
+	@echo ""
+
 %.main.cu.o: src/main.cu
 	$(NVCC) $(NVCCFLAGS) -Iinclude/$* -c $< -o $@
 
@@ -26,7 +38,7 @@ NVCCFLAGS += $(COMMONFLAGS) $(NVCCOPTIONS)
 %:  %.main.cu.o %.alphabeta.cu.o %.node.cu.o
 	$(NVCC) $(NVCCFLAGS) $*.node.cu.o $*.alphabeta.cu.o $*.main.cu.o -o $@.x
 
-.PHONY: clean
+.PHONY: help clean
 
 clean:
 	rm -rf *.x *.o
