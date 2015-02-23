@@ -158,8 +158,8 @@ __host__ __device__
 float value(node const& n){
     int stats[9] = {};
     line_stats(n, stats);
-    if(stats[4]) return INF;
-    if(stats[8]) return -INF;
+    //if(stats[4]) return INF;
+    //if(stats[8]) return -INF;
     float c = 1.;
     float v = 0;
     for(int i = 1; i <= 4; i++){

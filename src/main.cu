@@ -7,7 +7,7 @@
 #include <map>
 #include <vector>
 
-const int DEPTH = 5;
+extern const int DEPTH = 3;
 
 unsigned int get_bots_move(node const&);
 
@@ -44,7 +44,8 @@ int main(int argc, char *argv[]){
   std::map<std::string, strategy> players = {
     {"stdin", get_console_move},
     {"cpu", get_alpha_beta_cpu_move},
-    {"gpu", get_alpha_beta_gpu_move}
+    {"gpu", get_alpha_beta_gpu_move},
+    {"cpukk", get_alpha_beta_cpu_kk_move}
   };
   if(argc != 3 || !players.count(argv[1]) || !players.count(argv[2])){
     std::cout << "Usage: " << argv[0] << " player1 player2" << std::endl;
