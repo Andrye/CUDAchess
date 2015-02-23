@@ -19,21 +19,23 @@ unsigned int launchKernel(node const& current_node){
 	    nodes[i] = {};
     }
 
-    node *dev_nodes;
+ /*   node *dev_nodes;
     float* dev_values;
 
     cudaMalloc((void**) &dev_values, sizeof(float) * n_threads); //after we incorporate scan, this array should be moved to shared memeory
     cudaMalloc((void**) &dev_nodes, sizeof(node) * n_threads); //unused. According to Sewcio should be * n_blocks not n_children
     cudaMemcpy(dev_nodes, nodes, sizeof(node) * n_threads, cudaMemcpyHostToDevice);
+   */
     dim3 numThreads(n_threads, 1/*n_children*/, 1);
 
     unsigned int best_move;
-    alpha_beta(dev_nodes, dev_values, current_node, DEPTH, &best_move, numThreads); //TODO: for now it's cudaDeviceSynchronize();
+ //   alpha_beta(dev_nodes, dev_values, current_node, DEPTH, &best_move, numThreads); //TODO: for now it's cudaDeviceSynchronize();
+    alpha_beta(current_node, DEPTH, &best_move, numThreads);
     
-    delete[] nodes;
+    /*delete[] nodes;
     cudaFree((void**) &dev_values);
     cudaFree((void**) &dev_nodes); //TODO: so far I decided that it indeed should be n_threads, not n_blocks. We'll see later.
-    
+    */
     return best_move;
 }
 
@@ -45,7 +47,9 @@ int main(int argc, char *argv[]){
     {"stdin", get_console_move},
     {"cpu", get_alpha_beta_cpu_move},
     {"gpu", get_alpha_beta_gpu_move},
-    {"cpukk", get_alpha_beta_cpu_kk_move}
+    //{"cpukk", get_alpha_beta_cpu_kk_move},
+    {"gpukk", launchKernel}
+
   };
   if(argc != 3 || !players.count(argv[1]) || !players.count(argv[2])){
     std::cout << "Usage: " << argv[0] << " player1 player2" << std::endl;

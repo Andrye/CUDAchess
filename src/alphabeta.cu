@@ -5,7 +5,7 @@
 #include <cstdio>
 #include <chrono>
 
-#define CUDA 0
+#define CUDA 1
 
 /********** Note that, unlike theearly versions, every funtion returns the value of node X
             for the player who is on the move in node X. It it a calling function's responsibility to invert
@@ -40,9 +40,10 @@ struct stack_entry {
 };
 
 #if CUDA
-__global__
+__host__
 #endif
-void compute_children_of_a_node (node *nodes, float *dev_values, const node * current_node, unsigned int depth, AB limit);
+//void compute_children_of_a_node (node *nodes, float *dev_values, const node * current_node, unsigned int depth, AB limit);
+void compute_children_of_a_node (float *values, const node & current_node, unsigned int depth, AB limit, dim3 numThreads);
 
 #if CUDA
 __device__
@@ -70,7 +71,7 @@ AB invert (AB val)
  * best_move - can be nullptr if we only want the numerical result
  */
 __host__
-float alpha_beta(node * nodes, float * d_values, node const &current_node, unsigned int depth, unsigned int * best_move_value, dim3 numThreads) //TODO: for now it's assumed N_CHILDREN < legth of "nodes" array
+float alpha_beta(node const &current_node, unsigned int depth, unsigned int * best_move_value, dim3 numThreads) //TODO: for now it's assumed N_CHILDREN < legth of "nodes" array
 {
     if(depth == 0 || is_terminal(current_node))
 	{
@@ -90,34 +91,13 @@ float alpha_beta(node * nodes, float * d_values, node const &current_node, unsig
 	        break;
 	    }
 
-	float limit_estimation = invert( alpha_beta(nodes, d_values, child, depth - 1, nullptr, numThreads) );
+	float limit_estimation = invert( alpha_beta(child, depth - 1, nullptr, numThreads) );
     
     
-    node * dev_current_node;
-    cudaMalloc((void**) &dev_current_node, sizeof(node));
-    cudaError_t cudaResult = cudaMemcpy(dev_current_node, &current_node, sizeof(node), cudaMemcpyHostToDevice);
-    if(cudaResult != cudaSuccess)
-    {
-        printf("cuda error  %d\n", cudaResult);
-        throw 1;
-    }
-
-	compute_children_of_a_node <<<1, numThreads>>> (nodes, d_values, dev_current_node, depth, AB(limit_estimation, INF));
-    cudaResult = cudaDeviceSynchronize();
-    if(cudaResult != cudaSuccess)
-    {
-        printf("cuda error %s\n", cudaGetErrorString(cudaResult));
-        throw 1;
-    }
+	compute_children_of_a_node (values, current_node, depth, AB(limit_estimation, INF), numThreads);
     
-    cudaResult = cudaMemcpy(values, d_values, sizeof(float) * N_CHILDREN, cudaMemcpyDeviceToHost);
-    if(cudaResult != cudaSuccess)
-    {
-        printf("cuda error  %d\n", cudaResult);
-        throw 1;
-    }
 #else
-	compute_children_of_a_node (nodes, values, &current_node, depth, AB(-INF, INF));
+	compute_children_of_a_node (d_nodes, values, &current_node, depth, AB(-INF, INF));
     
 #endif
 
@@ -146,9 +126,9 @@ float alpha_beta(node * nodes, float * d_values, node const &current_node, unsig
     }*/
 
 	delete[] values;
-#if CUDA
+/*#if CUDA
     cudaFree(dev_current_node);
-#endif	
+#endif*/	
 	if(best_move_value != nullptr)
 	    *best_move_value = best_ind;
 	
@@ -176,6 +156,16 @@ void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits_){
     node local_node;
     float ret;
 
+
+/*    if(blid == 0 && thid==0)
+    {
+        printf("%d %d\n", blockDim.x, gridDim.x);
+        printf("%u\n", nodes[0].os);
+        printf("%u\n", nodes[blockDim.x - 1].os);
+        printf("%f\n", values[0]);
+        printf("%f\n", values[blockDim.x - 1]);
+    }
+  */
     valid_children[thid] = 0;
 
     /*    if(blid == 0 && thid == 0) printf("test\n");
@@ -383,7 +373,7 @@ unsigned int get_alpha_beta_cpu_kk_move(const node& n)
 {
     unsigned int res;
     dim3 dm3_unused;
-    alpha_beta(nullptr, nullptr, n, DEPTH, &res, dm3_unused);
+    alpha_beta(n, DEPTH, &res, dm3_unused);
     return res;
 }
 
@@ -450,25 +440,81 @@ unsigned int get_alpha_beta_cpu_move(node const &n){
 }
 
 #if CUDA
-__global__
+__host__
 #endif
-void compute_children_of_a_node (node *nodes, float *values, const node * current_node, unsigned int depth, AB limit)
+void compute_children_of_a_node (float *values, const node & current_node, unsigned int depth, AB limit, dim3 numThreads)
 {
-#if CUDA
-	int id = blockIdx.x * blockDim.x + threadIdx.x;
-    //int bl_id = blockIdx.x; //TODO: no blocks so far
-    //int th_id = threadIdx.x;
-#endif
-    
+#if !CUDA
     node child;
     node * childptr = &child;
-#if !CUDA
 	for (int id=0; id < N_CHILDREN; id++)
-#endif
-		if(get_child(*current_node, id, childptr))
+		if(get_child(current_node, id, childptr))
 			values[id] = invert( compute_node(child, depth - 1, invert(limit)) );
 		else
 		    values[id] =  -INF;
+
+#else
+    
+    node * nodes = new node[N_CHILDREN];
+    for (int i=0; i<N_CHILDREN; i++)
+        values[i] = -INF;
+    
+    unsigned int moves[N_CHILDREN];
+    int children_cnt = 0;
+    
+    if(depth == 1)
+    {
+        for(unsigned int i = 0; i < N_CHILDREN; i++)
+            if(get_child(current_node, i, &nodes[children_cnt]))
+                values[i] = -value( nodes[children_cnt] );
+        return;
+    }
+
+    for(unsigned int i = 0; i < N_CHILDREN; i++)
+    {
+        if(get_child(current_node, i, &nodes[children_cnt]))
+            moves[children_cnt++] = i;
+    }
+    
+    node * d_nodes;
+    float * d_values;
+    cudaMalloc((void**) &d_nodes, sizeof(node)*children_cnt);
+    cudaMalloc((void**) &d_values, sizeof(float)*children_cnt);
+    cudaError_t cudaResult = cudaMemcpy(d_nodes, nodes, sizeof(node)*children_cnt, cudaMemcpyHostToDevice);
+    if(cudaResult != cudaSuccess)
+    {
+        printf("cuda memcpy1 error  %d\n", cudaResult);
+        throw 1;
+    }
+
+    
+    alpha_beta_gpu <<<children_cnt, numThreads>>> (d_nodes, d_values, depth - 1, invert(limit));
+    
+    cudaResult = cudaDeviceSynchronize();
+    if(cudaResult != cudaSuccess)
+    {
+        printf("cuda synchro error %s\n", cudaGetErrorString(cudaResult));
+        throw 1;
+    }
+    
+    
+    cudaResult = cudaMemcpy(values, d_values, sizeof(float)*children_cnt, cudaMemcpyDeviceToHost);
+    if(cudaResult != cudaSuccess)
+    {
+        printf("cuda memcpy2 error  %s\n", cudaGetErrorString(cudaResult));
+        throw 1;
+    }
+
+    /*** because the APIs were not compalibile, we have to rewirte the array of values ***/
+    for (int i=children_cnt-1; i>=0; i--)
+    {
+        values[  moves[i] ] = -values[i];
+        values[i] = -INF;
+    }
+    cudaFree(d_nodes);
+    cudaFree(d_values);
+
+#endif
 }
 
 #if CUDA
@@ -480,7 +526,7 @@ float compute_node(node const &current_node, unsigned int depth, AB limit)
 		return value(current_node);
 	
 	node child;
-	float best_res = -INF;
+	float best_res = INF;
 	
 	for (int i=0; i<N_CHILDREN; i++)
 	{
@@ -527,3 +573,10 @@ int get_best_index(float * values)
 	return res_index;
 }
 
+    /*cudaMalloc((void**) &dev_current_node, sizeof(node));
+    cudaError_t cudaResult = cudaMemcpy(dev_current_node, &current_node, sizeof(node), cudaMemcpyHostToDevice);
+    if(cudaResult != cudaSuccess)
+    {
+        printf("cuda error  %d\n", cudaResult);
+        throw 1;
+    }*/
