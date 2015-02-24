@@ -94,7 +94,7 @@ int main(int argc, char *argv[]){
             throw "Wrong move returned";
         }
     }
-    std::cout << "GAME OVER. Player " << (i==0 ? "1 (O)" : "2 (X)") << " won!" << std::endl << nodes[i];
+    std::cout << "GAME OVER. Player " << (i==1 ? "1 (O)" : "2 (X)") << " won!" << std::endl << nodes[i];
     std::cout << "Player 1 (" << argv[1] << ") took " << pl1_time.count() << "\n";
     std::cout << "Player 2 (" << argv[2] << ") took " << pl2_time.count() << "\n";
     return 0;

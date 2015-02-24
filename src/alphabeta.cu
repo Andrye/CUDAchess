@@ -3,7 +3,6 @@
 #include <iostream>
 #include <limits>
 #include <cstdio>
-#include <chrono>
 
 #define CUDA 1
 #define WOJNA 0
@@ -17,7 +16,6 @@
 const float INF = std::numeric_limits<float>::infinity();
 
 
-std::chrono::duration<double> sewcio_time(0), krzysio_time(0), CPU_time(0);
 int dzieci_sewcia, dzieci_krzysia;
 int ruch_sewcia;
 
@@ -54,6 +52,8 @@ float compute_node(node const &current_node, unsigned int depth, AB limit);
 __host__
 int get_best_index(float * d_values);
 
+__host__ __device__
+float alpha_beta_cpu(node const& n, unsigned int depth, AB limits);
 
 __host__ __device__
 float invert(float limit)
@@ -75,25 +75,26 @@ __host__
 float alpha_beta(node const &current_node, unsigned int depth, unsigned int * best_move_value, dim3 numThreads) //TODO: for now it's assumed N_CHILDREN < legth of "nodes" array
 {
     
-    std::chrono::time_point<std::chrono::system_clock> start, end;
     if(best_move_value != nullptr)
     {
-        start = std::chrono::system_clock::now();
         #if WOJNA
         ruch_sewcia = false;
         #endif
     }
 
-    if(depth == -1 || is_terminal(current_node))
+    if(depth == -2 || is_terminal(current_node))
 	{
 		return value(current_node);
 	}
-
+    if(depth == -1)
+    {
+        return alpha_beta_cpu(current_node, 0, AB(-INF, INF));
+    }
 
 	node child;
     float * values = new float[N_CHILDREN]; 
 
-#if CUDA	
+#if CUDA
 	int __index_of_recursive_estimation; //this variable can probably be deleted in the final version, but is crucial untill GPU has recursion as well as CPU
 	for (int i=0; i<N_CHILDREN; i++)     //it should be sort, shouldn't it?
         if(get_child(current_node, i, &child))
@@ -104,8 +105,7 @@ float alpha_beta(node const &current_node, unsigned int depth, unsigned int * be
 
 	float limit_estimation = invert( alpha_beta(child, depth - 1, nullptr, numThreads) );
     
-    
-	compute_children_of_a_node (values, current_node, depth, AB(limit_estimation, INF), numThreads);
+	compute_children_of_a_node (values, current_node, depth + 1, AB(limit_estimation, INF), numThreads);
     
 #else
 	compute_children_of_a_node (d_nodes, values, &current_node, depth, AB(-INF, INF));
@@ -140,17 +140,9 @@ float alpha_beta(node const &current_node, unsigned int depth, unsigned int * be
     
 	if(best_move_value != nullptr)
     {
-        end = std::chrono::system_clock::now();
-        std::chrono::duration<double> elapsed_seconds = end-start;
-        std::time_t end_time = std::chrono::system_clock::to_time_t(end);
-
-        std::cout << "GPU generation time : " << elapsed_seconds.count() << "s KRZYSIA\n";
-        krzysio_time += elapsed_seconds;
-        std::cout << "till now GPU generation time : " << krzysio_time.count() << "s\n";
         #if WOJNA
             std::cout << "Krzys visited " << dzieci_krzysia << " nodes\n";
         #endif
-
     }
 	return result;
 
@@ -400,9 +392,6 @@ unsigned int get_alpha_beta_gpu_move(node const &n){
     node nodes[N_CHILDREN];
     int children_cnt = 0;
 
-    std::chrono::time_point<std::chrono::system_clock> start, end;
-    start = std::chrono::system_clock::now();
- 
     for(unsigned int i = 0; i < N_CHILDREN; i++){
         if(get_child(n, i, &nodes[children_cnt]))
             moves[children_cnt++] = i;
@@ -420,13 +409,6 @@ unsigned int get_alpha_beta_gpu_move(node const &n){
     cudaFree((void**) &dev_values);
     cudaFree((void**) &dev_nodes);
     int best = std::min_element(values, values + children_cnt) - values;
-    end = std::chrono::system_clock::now();
-    std::chrono::duration<double> elapsed_seconds = end-start;
-    std::time_t end_time = std::chrono::system_clock::to_time_t(end);
-
-    std::cout << "GPU generation time : " << elapsed_seconds.count() << "s SEWCIA\n";
-    sewcio_time += elapsed_seconds;
-    std::cout << "till now GPU generation time : " << sewcio_time.count() << "s\n";
     #if WOJNA
         std::cout << "Sewcio visited " << dzieci_sewcia << " nodes\n";
     #endif
@@ -437,9 +419,6 @@ unsigned int get_alpha_beta_cpu_move(node const &n){
     unsigned int moves[N_CHILDREN];
     node nodes[N_CHILDREN];
     int children_cnt = 0;
-
-    std::chrono::time_point<std::chrono::system_clock> start, end;
-    start = std::chrono::system_clock::now();
 
     for(unsigned int i = 0; i < N_CHILDREN; i++){
         if(get_child(n, i, &nodes[children_cnt]))
@@ -452,13 +431,6 @@ unsigned int get_alpha_beta_cpu_move(node const &n){
     }
     int best = std::min_element(values, values + children_cnt) - values;
 
-    end = std::chrono::system_clock::now();
-    std::chrono::duration<double> elapsed_seconds = end-start;
-    std::time_t end_time = std::chrono::system_clock::to_time_t(end);
-
-    std::cout << "CPU generation time : " << elapsed_seconds.count() << "s\n";
-    CPU_time += elapsed_seconds;
-    std::cout << "till now GPU generation time : " << CPU_time.count() << "s\n";
     return moves[best];
 }
 
