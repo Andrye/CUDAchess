@@ -15,10 +15,6 @@ unsigned int get_bots_move(node const&);
 unsigned int launchKernel(node const& current_node){
     const int n_threads = N_CHILDREN;
 
-    node* nodes = new node[n_threads];
-    for(int i = 0; i < n_threads; i++){
-	    nodes[i] = {};
-    }
 
  /*   node *dev_nodes;
     float* dev_values;
@@ -65,14 +61,24 @@ int main(int argc, char *argv[]){
         {"gpu", get_alpha_beta_gpu_move},
         {"gpukk", launchKernel}
     };
-    if(argc != 3 || !players.count(argv[1]) || !players.count(argv[2])){
-        std::cout << "Usage: " << argv[0] << " player1 player2" << std::endl;
-        std::cout << "\twhere player1, player 2 is one of:";
+    if(argc < 3 || !players.count(argv[1]) || !players.count(argv[2])){
+        std::cout << "Usage: " << argv[0] << " player1 player2 [ascetic_display = 1 [depth = 4 ]]" << std::endl;
+        std::cout << "\twhere\n- player1, player 2 is one of:";
         for(auto p : players)
             std::cout << " " << p.first;
+        std::cout << "\n- full_display set to 0 means printing only the time used by the players";
+        std::cout << "\n- depth >= 2";
         std::cout << std::endl;
         return 0;
     }
+
+
+    if(argc >= 4)
+    {
+        full_display(argv[3]);
+        if(argc >= 5)
+        {
+
     auto player1 = players[argv[1]];
     auto player2 = players[argv[2]];
     node nodes[2];
