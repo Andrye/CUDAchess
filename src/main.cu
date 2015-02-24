@@ -11,6 +11,7 @@
 int DEPTH = 2;
 
 unsigned int get_bots_move(node const&);
+void init_node(node *);
 
 unsigned int launchKernel(node const& current_node){
     const int n_threads = N_CHILDREN;
@@ -39,6 +40,7 @@ unsigned int launchKernel(node const& current_node){
 
 typedef unsigned int (*strategy)(node const&);
 typedef std::chrono::duration<double> time_interv;
+
 
 unsigned int count_time(strategy player, node const& n, time_interv *player_time)
 {
@@ -95,7 +97,7 @@ int main(int argc, char *argv[]){
     auto player1 = players[argv[1]];
     auto player2 = players[argv[2]];
     node nodes[2];
-    nodes[0] = {};
+    init_node(nodes);
     int i;
     
     time_interv pl1_time(0), pl2_time(0);
