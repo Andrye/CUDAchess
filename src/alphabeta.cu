@@ -6,18 +6,20 @@
 #include <chrono>
 
 #define CUDA 1
+#define WOJNA 0
+#define NIEZABIJANDRZEJA 1
 
 /********** Note that, unlike theearly versions, every funtion returns the value of node X
             for the player who is on the move in node X. It it a calling function's responsibility to invert
             the value. This should only be changed consistently everywhere in this file.
 ***********/
 
-//extern const float INF, NODE_INACCESSIBLE;
-
 const float INF = std::numeric_limits<float>::infinity();
 
-//TODO: how do we make extern const variables visible on device apart from stupid copying?
-//If there is no elegant solution, then macro?
+
+std::chrono::duration<double> sewcio_time(0), krzysio_time(0), CPU_time(0);
+int dzieci_sewcia, dzieci_krzysia;
+int ruch_sewcia;
 
 struct AB
 {
@@ -42,7 +44,6 @@ struct stack_entry {
 #if CUDA
 __host__
 #endif
-//void compute_children_of_a_node (node *nodes, float *dev_values, const node * current_node, unsigned int depth, AB limit);
 void compute_children_of_a_node (float *values, const node & current_node, unsigned int depth, AB limit, dim3 numThreads);
 
 #if CUDA
@@ -67,20 +68,30 @@ AB invert (AB val)
 
 
 
-/* nodes - unused till we implementbclocks
+/* 
  * best_move - can be nullptr if we only want the numerical result
  */
 __host__
 float alpha_beta(node const &current_node, unsigned int depth, unsigned int * best_move_value, dim3 numThreads) //TODO: for now it's assumed N_CHILDREN < legth of "nodes" array
 {
-    if(depth == 0 || is_terminal(current_node))
+    
+    std::chrono::time_point<std::chrono::system_clock> start, end;
+    if(best_move_value != nullptr)
+    {
+        start = std::chrono::system_clock::now();
+        #if WOJNA
+        ruch_sewcia = false;
+        #endif
+    }
+
+    if(depth == -1 || is_terminal(current_node))
 	{
 		return value(current_node);
 	}
 
 
 	node child;
-    float * values = new float[N_CHILDREN]; //it'll be done better in the future,
+    float * values = new float[N_CHILDREN]; 
 
 #if CUDA	
 	int __index_of_recursive_estimation; //this variable can probably be deleted in the final version, but is crucial untill GPU has recursion as well as CPU
@@ -102,9 +113,13 @@ float alpha_beta(node const &current_node, unsigned int depth, unsigned int * be
 #endif
 
 	int best_ind = get_best_index(values);
+	
+	//This may happen if all the branches were prunned, we must than send
+	//any move so that is it prunned in the parent node.
+	//We only need to find a valid one
 	if(best_ind == -1)
     {
-	    for (int i=0; i<N_CHILDREN; i++)     //it should be sort, shouldn't it?
+	    for (int i=0; i<N_CHILDREN; i++)     
             if(get_child(current_node, i, &child))
 	        {
 	             best_ind = i;
@@ -114,28 +129,31 @@ float alpha_beta(node const &current_node, unsigned int depth, unsigned int * be
        
 	float result = values[best_ind];
 	
-    /******** can be deleted in the final version ********/
 #if CUDA
     if(result <= limit_estimation)
         best_ind = __index_of_recursive_estimation;
 #endif            
-	/*if(best_move != nullptr)
-    {
-        //don't look at this code, it's stupid. But I want to finish it now
-		cudaMemcpy(best_move, nodes + best_ind, sizeof(node), cudaMemcpyDeviceToHost);
-    }*/
 
-	delete[] values;
-/*#if CUDA
-    cudaFree(dev_current_node);
-#endif*/	
 	if(best_move_value != nullptr)
-	    *best_move_value = best_ind;
-	
+        *best_move_value = best_ind;
+	delete[] values;
+    
+	if(best_move_value != nullptr)
+    {
+        end = std::chrono::system_clock::now();
+        std::chrono::duration<double> elapsed_seconds = end-start;
+        std::time_t end_time = std::chrono::system_clock::to_time_t(end);
+
+        std::cout << "GPU generation time : " << elapsed_seconds.count() << "s KRZYSIA\n";
+        krzysio_time += elapsed_seconds;
+        std::cout << "till now GPU generation time : " << krzysio_time.count() << "s\n";
+        #if WOJNA
+            std::cout << "Krzys visited " << dzieci_krzysia << " nodes\n";
+        #endif
+
+    }
 	return result;
 
-	//float best_val = thrust::reduce(d_values, d_values + N_CHILDREN, thrust::maximum<float>); //TODO: can we use library magic or should we paste out code for scan?    
-   
 }
 
 const int MAX_STACK_SIZE = 10;
@@ -157,15 +175,6 @@ void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits_){
     float ret;
 
 
-/*    if(blid == 0 && thid==0)
-    {
-        printf("%d %d\n", blockDim.x, gridDim.x);
-        printf("%u\n", nodes[0].os);
-        printf("%u\n", nodes[blockDim.x - 1].os);
-        printf("%f\n", values[0]);
-        printf("%f\n", values[blockDim.x - 1]);
-    }
-  */
     valid_children[thid] = 0;
 
     /*    if(blid == 0 && thid == 0) printf("test\n");
@@ -222,6 +231,10 @@ void alpha_beta_gpu(node *nodes, float *values, unsigned int depth, AB limits_){
             } else {
                 children_values[thid] = INF;
             }
+            #if WOJNA
+                if(ruch_sewcia) dzieci_sewcia++;
+                else dzieci_krzysia++;
+            #endif
 
 	    DEBUG {
 	      printf("%d children values: ", blid);
@@ -345,11 +358,11 @@ float alpha_beta_cpu(node const& n, unsigned int depth, AB limits){
     float min_val = INF;
     for(int i = 0; i < N_CHILDREN; i++){
       if(get_child(n, i, &c)){
-	float val = value(c);
-	if(val < min_val)
-	  min_val = val;
+	    float val = value(c);
+	    if(val < min_val)
+	        min_val = val;
+        }
       }
-    }
     return -min_val;
   }
   float best_val = -INF;
@@ -378,7 +391,11 @@ unsigned int get_alpha_beta_cpu_kk_move(const node& n)
 }
 
 unsigned int get_alpha_beta_gpu_move(node const &n){
-    const int depth = 2;
+    #if WOJNA
+        ruch_sewcia = true;
+    #endif
+
+    const int depth = DEPTH;
     unsigned int moves[N_CHILDREN];
     node nodes[N_CHILDREN];
     int children_cnt = 0;
@@ -403,22 +420,26 @@ unsigned int get_alpha_beta_gpu_move(node const &n){
     cudaFree((void**) &dev_values);
     cudaFree((void**) &dev_nodes);
     int best = std::min_element(values, values + children_cnt) - values;
-
     end = std::chrono::system_clock::now();
     std::chrono::duration<double> elapsed_seconds = end-start;
     std::time_t end_time = std::chrono::system_clock::to_time_t(end);
 
-    std::cout << "GPU generation time : " << elapsed_seconds.count() << "s\n";
+    std::cout << "GPU generation time : " << elapsed_seconds.count() << "s SEWCIA\n";
+    sewcio_time += elapsed_seconds;
+    std::cout << "till now GPU generation time : " << sewcio_time.count() << "s\n";
+    #if WOJNA
+        std::cout << "Sewcio visited " << dzieci_sewcia << " nodes\n";
+    #endif
     return moves[best];
 }
 unsigned int get_alpha_beta_cpu_move(node const &n){
-    const int depth = DEPTH - 2;
+    const int depth = DEPTH;
     unsigned int moves[N_CHILDREN];
     node nodes[N_CHILDREN];
     int children_cnt = 0;
 
-    //std::chrono::time_point<std::chrono::system_clock> start, end;
-    //start = std::chrono::system_clock::now();
+    std::chrono::time_point<std::chrono::system_clock> start, end;
+    start = std::chrono::system_clock::now();
 
     for(unsigned int i = 0; i < N_CHILDREN; i++){
         if(get_child(n, i, &nodes[children_cnt]))
@@ -427,15 +448,17 @@ unsigned int get_alpha_beta_cpu_move(node const &n){
     float values[children_cnt];
     AB ab(-INF, INF);
     for(int i = 0; i < children_cnt; i++){
-      values[i] = alpha_beta_cpu(nodes[i], depth, ab);
+      values[i] = alpha_beta_cpu(nodes[i], depth, invert(ab));
     }
     int best = std::min_element(values, values + children_cnt) - values;
 
-    //end = std::chrono::system_clock::now();
-    //std::chrono::duration<double> elapsed_seconds = end-start;
-    //std::time_t end_time = std::chrono::system_clock::to_time_t(end);
+    end = std::chrono::system_clock::now();
+    std::chrono::duration<double> elapsed_seconds = end-start;
+    std::time_t end_time = std::chrono::system_clock::to_time_t(end);
 
-    //std::cout << "CPU generation time : " << elapsed_seconds.count() << "s\n";
+    std::cout << "CPU generation time : " << elapsed_seconds.count() << "s\n";
+    CPU_time += elapsed_seconds;
+    std::cout << "till now GPU generation time : " << CPU_time.count() << "s\n";
     return moves[best];
 }
 
@@ -462,19 +485,36 @@ void compute_children_of_a_node (float *values, const node & current_node, unsig
     unsigned int moves[N_CHILDREN];
     int children_cnt = 0;
     
-    if(depth == 1)
+    if(depth == 0)
     {
         for(unsigned int i = 0; i < N_CHILDREN; i++)
             if(get_child(current_node, i, &nodes[children_cnt]))
                 values[i] = -value( nodes[children_cnt] );
         return;
     }
+    
 
+    /**** change this stupid code when Andrzej finishes sort changes ***/
+    #if NIEZABIJANDRZEJA
     for(unsigned int i = 0; i < N_CHILDREN; i++)
     {
         if(get_child(current_node, i, &nodes[children_cnt]))
             moves[children_cnt++] = i;
     }
+    #else
+    int ignore = 1;
+    for(unsigned int i = 0; i < N_CHILDREN; i++)
+    {
+        if(get_child(current_node, i, &nodes[children_cnt]))
+        {
+            if(ignore)
+                ignore = 0;
+            else
+                moves[children_cnt++] = i;
+    
+        }
+    }
+    #endif
     
     node * d_nodes;
     float * d_values;
@@ -483,7 +523,7 @@ void compute_children_of_a_node (float *values, const node & current_node, unsig
     cudaError_t cudaResult = cudaMemcpy(d_nodes, nodes, sizeof(node)*children_cnt, cudaMemcpyHostToDevice);
     if(cudaResult != cudaSuccess)
     {
-        printf("cuda memcpy1 error  %d\n", cudaResult);
+        printf("cuda memcpy error %s\n", cudaGetErrorString(cudaResult));
         throw 1;
     }
 
@@ -493,7 +533,7 @@ void compute_children_of_a_node (float *values, const node & current_node, unsig
     cudaResult = cudaDeviceSynchronize();
     if(cudaResult != cudaSuccess)
     {
-        printf("cuda synchro error %s\n", cudaGetErrorString(cudaResult));
+        printf("cuda synchronize error %s\n", cudaGetErrorString(cudaResult));
         throw 1;
     }
     
@@ -501,11 +541,10 @@ void compute_children_of_a_node (float *values, const node & current_node, unsig
     cudaResult = cudaMemcpy(values, d_values, sizeof(float)*children_cnt, cudaMemcpyDeviceToHost);
     if(cudaResult != cudaSuccess)
     {
-        printf("cuda memcpy2 error  %s\n", cudaGetErrorString(cudaResult));
+        printf("cuda memcpy error %s\n", cudaGetErrorString(cudaResult));
         throw 1;
     }
 
-    /*** because the APIs were not compalibile, we have to rewirte the array of values ***/
     for (int i=children_cnt-1; i>=0; i--)
     {
         values[  moves[i] ] = -values[i];
@@ -533,7 +572,7 @@ float compute_node(node const &current_node, unsigned int depth, AB limit)
 		if(!get_child(current_node, i, &child))
 		    continue;
 #if CUDA
-		float temp_res = invert(value(child)); //recursion here should be
+		float temp_res = invert(value(child));
 #else
 		float temp_res = invert( compute_node(child, depth - 1, invert(limit)) );
 #endif
@@ -545,10 +584,7 @@ float compute_node(node const &current_node, unsigned int depth, AB limit)
 			{
 			    limit.a = temp_res;
 				if(limit.a >= limit.b)
-					return best_res; 	//alpha-beta prunning - out move is so greate we know B doesn't want
-				                    //the parent node. We return INF though in fact best_res should be enough?
-	                                //EDIT friday morning. Now I think it should be only best_res, not INF. I'll reconsider it.
-
+					return best_res;
 	        }
 		}
 	}
@@ -556,7 +592,6 @@ float compute_node(node const &current_node, unsigned int depth, AB limit)
 }
 		
     
-//we'll paste code from C instead of this function, but will it be any imporvement at all?
 __host__
 int get_best_index(float * values)
 {
@@ -572,11 +607,3 @@ int get_best_index(float * values)
 	}
 	return res_index;
 }
-
-    /*cudaMalloc((void**) &dev_current_node, sizeof(node));
-    cudaError_t cudaResult = cudaMemcpy(dev_current_node, &current_node, sizeof(node), cudaMemcpyHostToDevice);
-    if(cudaResult != cudaSuccess)
-    {
-        printf("cuda error  %d\n", cudaResult);
-        throw 1;
-    }*/
