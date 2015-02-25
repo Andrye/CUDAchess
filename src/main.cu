@@ -91,8 +91,10 @@ int main(int argc, char *argv[]){
             }
         }
     }
-    if(!cut_after)
+    if(cut_after == 0)
       cut_after = 100000000;
+    else if(cut_after == -1)
+        cut_after = 1200000;
 
     auto player1 = players[argv[1]];
     auto player2 = players[argv[2]];
@@ -117,8 +119,13 @@ int main(int argc, char *argv[]){
 	        move = count_time(player2, nodes[i], &pl2_time);
 	        if(move_counter >= cut_after)
 	          break;
+            if(cut_after == 1200000)
+            {
+                std::cout << "After " << move_counter << ":\nPlayer 1 (" << argv[1] << ") took " << pl1_time.count() << " total, average " << pl1_time.count()/move_counter << "s\n";
+                std::cout << "Player 2 (" << argv[2] << ") took " << pl2_time.count() << " total, average " << pl2_time.count()/move_counter << "s\n";
+            }
         }
-	    if(!get_child(nodes[i], move, nodes+1-i))
+        if(!get_child(nodes[i], move, nodes+1-i))
         {
             printf("move wrong %d\n", move);
             throw "Wrong move returned";
