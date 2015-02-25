@@ -8,7 +8,7 @@
 #include <vector>
 #include <chrono>
 
-extern const int DEPTH = 2;
+int DEPTH = 2;
 
 unsigned int get_bots_move(node const&);
 
@@ -72,12 +72,17 @@ int main(int argc, char *argv[]){
         return 0;
     }
 
-
+  
+    bool full_display;
     if(argc >= 4)
     {
-        full_display(argv[3]);
+        full_display = std::stoi(argv[3]);
         if(argc >= 5)
         {
+            DEPTH = std::stoi(argv[4]);
+            std::cout << DEPTH << std::endl;
+        }
+    }
 
     auto player1 = players[argv[1]];
     auto player2 = players[argv[2]];

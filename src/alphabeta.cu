@@ -3,7 +3,7 @@
 #include <iostream>
 #include <limits>
 #include <cstdio>
-
+    
 #define CUDA 1
 #define WOJNA 0
 #define NIEZABIJANDRZEJA 1
@@ -17,7 +17,7 @@ struct AB {
   float a, b;
 
   __host__ __device__ AB() {}
-
+  
   __host__ __device__ AB(float a, float b) : a(a), b(b) {}
 };
 
@@ -76,7 +76,7 @@ __host__ float alpha_beta(node const &current_node, unsigned int depth,
     return alpha_beta_cpu(current_node, 0, AB(-INF, INF));
   }
 
-  node child;
+  node child, child1;
   float *values = new float[N_CHILDREN];
 
 #if CUDA
@@ -85,10 +85,9 @@ __host__ float alpha_beta(node const &current_node, unsigned int depth,
                                         // untill GPU has recursion as well as
                                         // CPU
   for (int i = 0; i < N_CHILDREN; i++)  // it should be sort, shouldn't it?
-    if (get_child(current_node, i, &child)) {
-      __index_of_recursive_estimation = i;
-      break;
-    }
+    if (get_child(current_node, i, &child)) 
+        __index_of_recursive_estimation = i;
+      
 
   float limit_estimation =
       invert(alpha_beta(child, depth - 1, nullptr, numThreads));
