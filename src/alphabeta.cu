@@ -35,7 +35,7 @@ __host__
     void
         compute_children_of_a_node(float *values, const node &current_node,
                                    unsigned int depth, AB limit,
-                                   dim3 numThreads);
+                                   dim3 numThreads, int exclude);
 
 #if CUDA
 __device__
@@ -76,37 +76,53 @@ __host__ float alpha_beta(node const &current_node, unsigned int depth,
     return alpha_beta_cpu(current_node, 0, AB(-INF, INF));
   }
 
-  node child, child1;
+  node child;
   float *values = new float[N_CHILDREN];
 
 #if CUDA
-  int __index_of_recursive_estimation;  // this variable can probably be deleted
+  int __index_of_recursive_estimation;  
+  // this variable can probably be deleted
                                         // in the final version, but is crucial
                                         // untill GPU has recursion as well as
                                         // CPU
-  for (int i = 0; i < N_CHILDREN; i++)  // it should be sort, shouldn't it?
-    if (get_child(current_node, i, &child)) 
-        __index_of_recursive_estimation = i;
-      
+  int child_cntr = 0;
+  struct order_chld {
+    float value;
+    int idx;
+  } ord_nodes[N_CHILDREN];
+    
+  for (int i = 0; i < N_CHILDREN; i++) 
+    if (get_child(current_node, i, &child)) {
+      ord_nodes[child_cntr] = {value(child), i};
+      ++child_cntr;   
+    }
+  std::sort(ord_nodes, ord_nodes + child_cntr, 
+          [](const order_chld & a, const order_chld & b)->bool
+          {
+            if(a.value != b.value)
+                return a.value > b.value;
+            return a.idx > b.idx;
+          } );
 
-  float limit_estimation =
-      invert(alpha_beta(child, depth - 1, nullptr, numThreads));
+  get_child(current_node, ord_nodes[0].idx, &child);
+
+  float limit_estimation = invert(alpha_beta(child, depth - 1, nullptr, numThreads));
 
   compute_children_of_a_node(values, current_node, depth + 1,
-                             AB(limit_estimation, INF), numThreads);
-
+                             AB(limit_estimation, INF), numThreads, ord_nodes[0].idx);
 #else
   compute_children_of_a_node(d_nodes, values, &current_node, depth,
-                             AB(-INF, INF));
-
+                             AB(-INF, INF), 0);
+  
 #endif
 
-  int best_ind = get_best_index(values);
+ // int best_ind = get_best_index(velues);
+  int best_ind = std::max_element(values, values + N_CHILDREN) - values;
 
   // This may happen if all the branches were prunned, we must than send
   // any move so that is it prunned in the parent node.
   // We only need to find a valid one
-  if (best_ind == -1) {
+  if (!get_child(current_node, best_ind, nullptr)) {
     for (int i = 0; i < N_CHILDREN; i++)
       if (get_child(current_node, i, &child)) {
         best_ind = i;
@@ -117,7 +133,7 @@ __host__ float alpha_beta(node const &current_node, unsigned int depth,
   float result = values[best_ind];
 
 #if CUDA
-  if (result <= limit_estimation) best_ind = __index_of_recursive_estimation;
+  if (result <= limit_estimation) best_ind = ord_nodes[0].idx;
 #endif
 
   if (best_move_value != nullptr) *best_move_value = best_ind;
@@ -405,7 +421,7 @@ __host__
 #endif
     void
 compute_children_of_a_node(float *values, const node &current_node,
-                           unsigned int depth, AB limit, dim3 numThreads) {
+                           unsigned int depth, AB limit, dim3 numThreads, int exclude) {
 #if !CUDA
   node child;
   node *childptr = &child;
@@ -423,30 +439,10 @@ compute_children_of_a_node(float *values, const node &current_node,
   unsigned int moves[N_CHILDREN];
   int children_cnt = 0;
 
-  if (depth == 0) {
-    for (unsigned int i = 0; i < N_CHILDREN; i++)
-      if (get_child(current_node, i, &nodes[children_cnt]))
-        values[i] = -value(nodes[children_cnt]);
-    return;
-  }
-
-/**** change this stupid code when Andrzej finishes sort changes ***/
-#if NIEZABIJANDRZEJA
   for (unsigned int i = 0; i < N_CHILDREN; i++) {
-    if (get_child(current_node, i, &nodes[children_cnt]))
+    if (get_child(current_node, i, &nodes[children_cnt]) && i != exclude)
       moves[children_cnt++] = i;
   }
-#else
-  int ignore = 1;
-  for (unsigned int i = 0; i < N_CHILDREN; i++) {
-    if (get_child(current_node, i, &nodes[children_cnt])) {
-      if (ignore)
-        ignore = 0;
-      else
-        moves[children_cnt++] = i;
-    }
-  }
-#endif
 
   node *d_nodes;
   float *d_values;

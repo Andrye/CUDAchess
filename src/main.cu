@@ -62,27 +62,35 @@ int main(int argc, char *argv[]){
         {"gpukk", launchKernel}
     };
     if(argc < 3 || !players.count(argv[1]) || !players.count(argv[2])){
-        std::cout << "Usage: " << argv[0] << " player1 player2 [ascetic_display = 1 [depth = 4 ]]" << std::endl;
+        std::cout << "Usage: " << argv[0] << " player1 player2 [ascetic_display = 1 [depth = 4 [only_first = 0 ]]]" << std::endl;
         std::cout << "\twhere\n- player1, player 2 is one of:";
         for(auto p : players)
             std::cout << " " << p.first;
         std::cout << "\n- full_display set to 0 means printing only the time used by the players";
         std::cout << "\n- depth >= 2";
+        std::cout << "\n- only_first set to i means only returning the time spend on the first i moves by each player, 0 - full game.";
         std::cout << std::endl;
         return 0;
     }
 
   
-    bool full_display;
+    bool full_display = 1;
+    int cut_after = 0;
     if(argc >= 4)
     {
         full_display = std::stoi(argv[3]);
         if(argc >= 5)
         {
-            DEPTH = std::stoi(argv[4]);
+            DEPTH = std::stoi(argv[4]) - 2;
             std::cout << DEPTH << std::endl;
+            if(argc >= 6)
+            {
+                cut_after = std::stoi(argv[5]);
+            }
         }
     }
+    if(!cut_after)
+      cut_after = 100000000;
 
     auto player1 = players[argv[1]];
     auto player2 = players[argv[2]];
@@ -91,23 +99,34 @@ int main(int argc, char *argv[]){
     int i;
     
     time_interv pl1_time(0), pl2_time(0);
+    int move_counter = 0;
 
     for(i = 0; !is_terminal(nodes[i]); i=1-i){
         unsigned int move;
-	    std::cout << nodes[i] << "Node value: " << value(nodes[i]) << std::endl;
+	    if(full_display)
+	      std::cout << nodes[i] << "Node value: " << value(nodes[i]) << std::endl;
 	    if(i==0)
-	        move = count_time(player1, nodes[i], &pl1_time);
+        {
+            move = count_time(player1, nodes[i], &pl1_time);
+            move_counter++;
+        }
 	    else
+	    {
 	        move = count_time(player2, nodes[i], &pl2_time);
+	        if(move_counter >= cut_after)
+	          break;
+        }
 	    if(!get_child(nodes[i], move, nodes+1-i))
         {
             printf("move wrong %d\n", move);
             throw "Wrong move returned";
         }
     }
-    std::cout << "GAME OVER. Player " << (i==1 ? "1 (O)" : "2 (X)") << " won!" << std::endl << nodes[i];
-    std::cout << "Player 1 (" << argv[1] << ") took " << pl1_time.count() << "\n";
-    std::cout << "Player 2 (" << argv[2] << ") took " << pl2_time.count() << "\n";
+    std::cout << "GAME OVER. Player " << (i==1 ? "1 (O)" : "2 (X)") << " won!" << std::endl;
+    if(full_display)
+       std::cout << nodes[i];
+    std::cout << "Player 1 (" << argv[1] << ") took " << pl1_time.count() << " total, average " << pl1_time.count()/move_counter << "s\n";
+    std::cout << "Player 2 (" << argv[2] << ") took " << pl2_time.count() << " total, average " << pl2_time.count()/(move_counter-i) << "s\n";
     return 0;
 }
 
