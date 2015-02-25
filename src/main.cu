@@ -62,13 +62,13 @@ int main(int argc, char *argv[]){
         {"gpukk", launchKernel}
     };
     if(argc < 3 || !players.count(argv[1]) || !players.count(argv[2])){
-        std::cout << "Usage: " << argv[0] << " player1 player2 [ascetic_display = 1 [depth = 4 [only_first = 0 ]]]" << std::endl;
+        std::cout << "Usage: " << argv[0] << " player1 player2 [full_display = 1 [depth = 4 [cut_after = 0 ]]]" << std::endl;
         std::cout << "\twhere\n- player1, player 2 is one of:";
         for(auto p : players)
             std::cout << " " << p.first;
         std::cout << "\n- full_display set to 0 means printing only the time used by the players";
-        std::cout << "\n- depth >= 2";
-        std::cout << "\n- only_first set to i means only returning the time spend on the first i moves by each player, 0 - full game.";
+        std::cout << "\n- depth >= 2, means the real depth (edge-wise), so default 4 is what Sewcio-compatible APIs call \"depth == 2\"";
+        std::cout << "\n- cut_after set to i means only returning the time spend on the first i moves by each player, 0 - full game.";
         std::cout << std::endl;
         return 0;
     }
@@ -122,7 +122,10 @@ int main(int argc, char *argv[]){
             throw "Wrong move returned";
         }
     }
-    std::cout << "GAME OVER. Player " << (i==1 ? "1 (O)" : "2 (X)") << " won!" << std::endl;
+    if(move_counter >= cut_after)
+      std::cout << "Reached the cut_after barrier\n";
+    else
+      std::cout << "GAME OVER. Player " << (i==1 ? "1 (O)" : "2 (X)") << " won!" << std::endl;
     if(full_display)
        std::cout << nodes[i];
     std::cout << "Player 1 (" << argv[1] << ") took " << pl1_time.count() << " total, average " << pl1_time.count()/move_counter << "s\n";
