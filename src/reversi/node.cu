@@ -140,6 +140,7 @@ bool get_child(node const& parent, unsigned int id, node *d_child){
     assert(!(parent.os & parent.xs));
     int x = id % 8;
     int y = id / 8;
+    if(((parent.os | parent.xs) >> id) & 1) return false;
     node tmp;
     tmp.os = parent.os + (((uint64_t)1) << id);
     tmp.xs = parent.xs;
