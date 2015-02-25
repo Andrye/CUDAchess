@@ -56,7 +56,7 @@ __host__ __device__ AB invert(AB val) {
 /*
  * best_move - can be nullptr if we only want the numerical result
  */
-__host__ float alpha_beta(node const &current_node, unsigned int depth,
+__host__ float alpha_beta(node const &current_node, int depth,
                           unsigned int *best_move_value,
                           dim3 numThreads)  // TODO: for now it's assumed
                                             // N_CHILDREN < legth of "nodes"
@@ -80,7 +80,6 @@ __host__ float alpha_beta(node const &current_node, unsigned int depth,
   float *values = new float[N_CHILDREN];
 
 #if CUDA
-  int __index_of_recursive_estimation;  
   // this variable can probably be deleted
                                         // in the final version, but is crucial
                                         // untill GPU has recursion as well as
@@ -107,7 +106,6 @@ __host__ float alpha_beta(node const &current_node, unsigned int depth,
   get_child(current_node, ord_nodes[0].idx, &child);
 
   float limit_estimation = invert(alpha_beta(child, depth - 1, nullptr, numThreads));
-
   compute_children_of_a_node(values, current_node, depth + 1,
                              AB(limit_estimation, INF), numThreads, ord_nodes[0].idx);
 #else
