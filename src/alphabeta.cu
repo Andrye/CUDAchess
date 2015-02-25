@@ -84,22 +84,34 @@ __host__ float alpha_beta(node const &current_node, unsigned int depth,
                                         // in the final version, but is crucial
                                         // untill GPU has recursion as well as
                                         // CPU
+  int child_cntr = 0;
+  struct order_chld {
+    float value;
+    int idx;
+  } ord_nodes[N_CHILDREN];
+    
   for (int i = 0; i < N_CHILDREN; i++)  // it should be sort, shouldn't it?
     if (get_child(current_node, i, &child)) {
       __index_of_recursive_estimation = i;
-      break;
+      ord_nodes[i] = {value(child), i};
+      ++child_cntr;   
     }
+  std::sort(ord_nodes, ord_nodes + child_cntr, 
+          [](const order_chld & a, const order_chld & b)->bool
+          {
+            return a.value > b.value; } );
+
+  get_child(current_node, ord_nodes[0].idx, &child);
 
   float limit_estimation =
       invert(alpha_beta(child, depth - 1, nullptr, numThreads));
 
   compute_children_of_a_node(values, current_node, depth + 1,
                              AB(limit_estimation, INF), numThreads);
-
 #else
   compute_children_of_a_node(d_nodes, values, &current_node, depth,
                              AB(-INF, INF));
-
+  
 #endif
 
   int best_ind = get_best_index(values);
@@ -431,23 +443,10 @@ compute_children_of_a_node(float *values, const node &current_node,
     return;
   }
 
-/**** change this stupid code when Andrzej finishes sort changes ***/
-#if NIEZABIJANDRZEJA
   for (unsigned int i = 0; i < N_CHILDREN; i++) {
     if (get_child(current_node, i, &nodes[children_cnt]))
       moves[children_cnt++] = i;
   }
-#else
-  int ignore = 1;
-  for (unsigned int i = 0; i < N_CHILDREN; i++) {
-    if (get_child(current_node, i, &nodes[children_cnt])) {
-      if (ignore)
-        ignore = 0;
-      else
-        moves[children_cnt++] = i;
-    }
-  }
-#endif
 
   node *d_nodes;
   float *d_values;
